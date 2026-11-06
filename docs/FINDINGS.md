@@ -2,34 +2,25 @@
 
 Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-generic), newest first.
 
-## F-14: speakers silent after deep S3 (amp loses its EFI configuration)
+## F-14: speakers silent after deep S3 — fixed (converter channel count)
 
-- **Symptom.** Loopback passes at boot (about +69 dB) and fails after any deep-S3 resume. A
-  driver reload doesn't help, and only a reboot does.
-- **Evidence.**
-  - The codec state after resume equals the boot state: format 0x4013, DigEn 0x111, GPIO0
-    high while playing, TDM_EN=1, and the hidden coef block 0x40-0x6b is identical.
-  - `HDEF._PS3` drives PCH GPIO51 low. Removing that from the DSDT (now in
-    components/acpi-dsdt) didn't fix it, because S3 cuts the rail anyway.
-  - Codec GPIO4/5 are the amp supply rails. Driving them as outputs at boot kills sound, so
-    they must stay inputs, and toggling them after resume doesn't help.
-  - SMC `AUPO` is 0 in both states. The only extra bus devices are the RTC at SMBus 0x44 and
-    the USB-PD controller at I2C1 0x12. No host-visible amp control bus exists.
-  - **s2idle keeps the speakers working** across sleep (loopback +62.9 dB after resume).
-- **Cause.** The class-D amp is configured only by EFI's chime path, over the codec. Deep S3
-  removes its power. Linux has no documented way to re-run that configuration.
-- **Cost of s2idle.** RAPL package power during s2idle is 0.96 W, against 1.34 W awake and
-  idle. Broadwell barely leaves package C-states under Linux s2idle, while S3 is near zero.
-- **Further evidence (deep S3 vs working, components/audio/dumps).** All 256 vendor
-  coefficients, in both the normal and the test-mode view, are identical across deep S3. Only
-  the EFI-programmed SSID and stream-time bits differ. Driving GPIO4/5 high or low while
-  running doesn't affect sound, so they are not the amp rails on this unit. The lost state is
-  inside the external amp, with no host-visible control path.
-- **Open route.** Reverse-engineer Apple's EFI audio driver from the SPI flash. A read-only
-  `flashrom` dump was taken (kept out of git: it holds machine data). Extraction tooling was
-  not run.
-- **Decision.** This is the owner's call: deep S3 (long standby, speakers silent until reboot
-  after a resume) or s2idle (speakers always work, roughly 1 W while asleep).
+- **Symptom.** Loopback passes at boot and fails after any deep-S3 resume. A driver reload
+  doesn't help, and only a reboot does. s2idle doesn't show it.
+- **Ruled out.** All coefficients (0x00-0x3f and the test-mode 0x40-0x7f; the 16-bit index
+  space mirrors these), GPIO0-5 levels, PCH GPIO51 / `HDEF._PS3`, SMC `AUPO`, any amp on
+  SMBus or I2C1, and the amp-enable order.
+- **Found in Apple's EFI.** A read-only `flashrom` dump, unpacked with UEFIExtract
+  (LongSoft UEFITool), gives the boot-chime HDA driver (DXE `201A92E1-2D0F-48E9-A3AB-93E1695A92F2`,
+  strings `layout-id`, `SystemAudioVolume`, `MaximumBootBeepVolume`) and its codec table (raw
+  section in `F33528CA-…`). Its init verbs for the CS4208 are exactly the coef image already
+  restored. Enumerating every verb opcode the driver builds turned up one Linux never sends to
+  this codec: **SET_CVT_CHAN_COUNT (0x72d)**. After deep S3, converter 0x0a reads channel
+  count 0. Setting it to 3 (4 channels) brings the speakers back immediately (+72 dB).
+- **Why it hid.** A codec reset (driver reload) preserves the register, but a real power loss
+  clears it, and generic HDA code only programs it for HDMI.
+- **Fix.** `mb81_tdm_prepare()` sets `AC_VERB_SET_CVT_CHAN_COUNT = channels - 1` on 0x0a.
+  Verified over repeated deep-S3 cycles via `systemctl suspend`, with loopback after resume.
+  Deep sleep is the default again.
 
 ## F-13: Bluetooth sometimes misses its first HCI commands at boot
 
@@ -120,13 +111,20 @@ Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-g
 - **Resolved.** After a physical replug, everything re-enumerated (hub, billboard, keyboard,
   TP-Link). The Mac's port is fine; the adapter latches up when it glitches during sleep.
 
-## F-7: NVMe interrupts missing after the first S3 test (not reproduced since F-6)
+## F-7: NVMe loses interrupts after some deep-S3 resumes (mitigated)
 
 - **Symptom.** About 3 minutes of `nvme nvme0: I/O tag N QID 1 timeout, completion polled`
   after resume, then hung-task warnings, then recovery.
 - **Evidence.** No APST (`npss 0`). MSI is still enabled after resume and the IRQ fires on later
   I/O. Not seen in four later cycles once F-6 was fixed.
-- **Suspected cause.** In that cycle the UART came back held in reset (F-6). It shares
+- **Seen again** after the F-6 fix, on about 1 in 8 deep resumes: `completion polled`
+  timeouts roughly every 60 s, on QID 0 and 1, which share one MSI vector on the Apple S1X.
+  PCI config and ASPM are identical before and after resume. A second controller reset
+  (`echo 1 > /sys/class/nvme/nvme0/reset_controller`) clears it at once.
+- **Mitigation.** `components/nvme-resume`: a systemd-sleep post hook that resets Apple
+  106b:2001 controllers after every resume. Zero lost interrupts over the following cycles.
+  Root cause still open (probably a ready-timing quirk in the S1X's first post-resume init).
+- **Old hypothesis (superseded).** In the first cycle the UART came back held in reset (F-6). It shares
   level-triggered IRQ 21 with SPI, and CPU2 also services the NVMe vector. An interrupt storm
   there could starve NVMe completions. Unconfirmed. `test-suspend.sh` now times a 64 MiB direct
   read after every resume.

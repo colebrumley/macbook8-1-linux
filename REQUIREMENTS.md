@@ -23,7 +23,7 @@ the item is done. Status values: `done` (check passes), `open`, `blocked` (reaso
 | DSP-2 | Ambient light sensor feeds automatic brightness | `verify.sh DSP-2` | done |
 | PWR-1 | Battery percentage, charging state, AC detection | `verify.sh PWR-1` | done |
 | PWR-2 | Thermal sensors readable; thermald manages the fanless chassis | `verify.sh PWR-2` | done |
-| PWR-3 | Suspend to RAM and resume, with keyboard, trackpad, Wi-Fi and Bluetooth still working | `verify.sh PWR-3` | done (s2idle default; speakers verified after resume; deep S3 optional, F-14) |
+| PWR-3 | Suspend to RAM and resume, with keyboard, trackpad, Wi-Fi and Bluetooth still working | `verify.sh PWR-3` | done (deep S3 default; speakers, Wi-Fi, BT, NVMe verified after resume) |
 | BT-4 | Bluetooth recovers if its UART setup fails at boot/resume | `verify.sh BT-4` | done |
 | PWR-4 | Lid switch triggers suspend | `verify.sh PWR-4` | done |
 | STO-1 | NVMe (Apple S1X) healthy, power states working | `verify.sh STO-1` | done |

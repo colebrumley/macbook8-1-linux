@@ -21,3 +21,6 @@
 - USB-C: the Mac's port is fine; the hub recovered on replug.
 - Sleep defaults to s2idle so the speakers survive suspend (`MB81_SLEEP=deep` for long standby).
   PWR-3 now verifies the speakers after resume.
+- Speakers survive deep S3: the TDM converter's channel count is restored (found in Apple's EFI
+  HDA driver). Deep sleep is the default again.
+- NVMe: controller reset after resume (Apple S1X sometimes loses interrupts after deep S3).

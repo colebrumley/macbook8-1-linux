@@ -171,7 +171,9 @@ c_suspend() {
 c_lid() { input_present "Lid Switch"; }
 c_nvme() {
   [ -e /dev/nvme0n1 ] || { echo "no nvme0n1"; return 1; }
-  klog | grep -qiE "nvme.*(timeout|reset controller)" && { echo "nvme timeouts/resets this boot"; return 1; }
+  # judge the current state: only look at the log since the last resume (or boot)
+  local since; since=$(klog | grep -n "PM: suspend exit" | tail -1 | cut -d: -f1); since=${since:-1}
+  klog | tail -n +"$since" | grep -qiE "nvme.*(timeout|reset controller)" && { echo "nvme timeouts since last resume/boot"; return 1; }
   return 0
 }
 

@@ -67,7 +67,7 @@ For a one-off boot, press `e` in GRUB and add `intel_iommu=off` to the `linux` l
 | GPU, VA-API video decode | ✅ | stock i915 + `intel-media-va-driver` |
 | Display brightness, ambient light sensor | ✅ | stock (acpi_video, iio-sensor-proxy) |
 | Battery, AC, thermals, lid | ✅ | stock |
-| Suspend / resume | ✅ | SPI + UART resume patches; see **Sleep** below |
+| Suspend / resume (deep S3) | ✅ | SPI + UART resume patches, NVMe resume reset, speaker channel-count fix |
 | USB-C (charging, USB, DisplayPort) | ✅ | stock |
 | Bluetooth patch firmware | n/a | none exists for this chip, not even in Apple's Boot Camp drivers |
 
@@ -77,16 +77,12 @@ For a one-off boot, press `e` in GRUB and add `intel_iommu=off` to the `linux` l
 
 ## Sleep
 
-The speaker amplifier is configured only by Apple's firmware at power-on. Deep S3 sleep cuts
-its power, so after a deep-sleep resume the speakers stay silent until a reboot. Headphones and
-Bluetooth audio still work. The default is therefore **s2idle**, which keeps the speakers
-working but draws about 1 W while asleep. For long standby instead:
+Deep S3 sleep (real, near-zero-power standby) is the default, and everything comes back after
+it, speakers included. To use s2idle instead:
 
 ```bash
-sudo MB81_SLEEP=deep /opt/macbook8-1-linux/components/grub/install.sh && sudo reboot
+sudo MB81_SLEEP=s2idle /opt/macbook8-1-linux/components/grub/install.sh && sudo reboot
 ```
-
-Work on re-initializing the amp after deep S3 is tracked in [docs/FINDINGS.md](docs/FINDINGS.md) (F-14).
 
 ## How it works
 
@@ -102,6 +98,7 @@ Each fix is a component in [`components/`](components/), with its root cause and
 | `audio` | DKMS `snd-hda-codec-cs420x` with a MacBook8,1 fixup, plus a PipeWire speaker sink |
 | `camera` | `facetimehd` driver and firmware |
 | `bt-recover` | rebinds Bluetooth if its UART setup misses at boot/resume |
+| `nvme-resume` | resets the Apple NVMe after resume (it sometimes loses interrupts otherwise) |
 | `grub` | `intel_iommu=off`, sleep mode |
 | `firstboot` | used by the install-media path: runs the installer once on first boot |
 
