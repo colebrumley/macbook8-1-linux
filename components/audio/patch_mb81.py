@@ -132,11 +132,18 @@ static unsigned int mb81_rail_data;
 module_param(mb81_rail_data, uint, 0644);
 MODULE_PARM_DESC(mb81_rail_data, "MacBook8,1: level for the driven amp-rail GPIOs");
 
+static bool mb81_amp_manual;	/* experiment: never drive GPIO0, leave it to the user */
+module_param(mb81_amp_manual, bool, 0644);
+MODULE_PARM_DESC(mb81_amp_manual, "MacBook8,1: don't drive the amp-enable GPIO (experiments only)");
+
 /* amp on only while the speaker PCM runs and no headphone is plugged in */
 static bool mb81_update_amp(struct hda_codec *codec)
 {
 	struct cs_spec *spec = codec->spec;
 	bool on = spec->mb81_playing && !snd_hda_jack_detect(codec, MB81_HP_PIN);
+
+	if (mb81_amp_manual)
+		return false;
 	bool was = spec->gpio_data & MB81_GPIO_AMP_EN;
 	unsigned int rails = mb81_rail_mask & 0x36;	/* GPIO1, GPIO2, GPIO4, GPIO5 */
 
