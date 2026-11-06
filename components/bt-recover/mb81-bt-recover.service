@@ -1,0 +1,11 @@
+[Unit]
+Description=macbook8-1-linux: recover MacBook8,1 UART Bluetooth if setup failed
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mb81-bt-recover
+
+[Install]
+WantedBy=multi-user.target

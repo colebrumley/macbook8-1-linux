@@ -1,0 +1,16 @@
+#!/bin/bash
+# First boot after an (auto)install: run the full installer once, then reboot so the
+# patched drivers load. Retries on the next boot if the network wasn't up yet.
+set -uo pipefail
+DIR=/opt/macbook8-1-linux
+mkdir -p /var/lib/mb81-linux
+for i in $(seq 1 60); do curl -fsI https://git.kernel.org >/dev/null 2>&1 && break; sleep 5; done
+if "$DIR/install.sh"; then
+  touch /var/lib/mb81-linux/firstboot-done
+  systemctl disable mb81-firstboot.service
+  echo "macbook8-1-linux: setup done, rebooting"
+  systemctl reboot
+else
+  echo "macbook8-1-linux: setup failed; will retry next boot (log: /var/log/mb81-linux-install.log)"
+  exit 1
+fi

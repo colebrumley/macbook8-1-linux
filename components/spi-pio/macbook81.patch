@@ -1,0 +1,167 @@
+--- a/drivers/spi/spi-pxa2xx.c
++++ b/drivers/spi/spi-pxa2xx.c
+@@ -726,6 +726,9 @@
+ 	 * the IRQ was not for us (we shouldn't be RPM suspended when the
+ 	 * interrupt is enabled).
+ 	 */
++	if (READ_ONCE(drv_data->suspended))
++		return IRQ_NONE;
++
+ 	if (pm_runtime_suspended(drv_data->ssp->dev))
+ 		return IRQ_NONE;
+ 
+@@ -1479,6 +1482,36 @@
+ }
+ EXPORT_SYMBOL_NS_GPL(pxa2xx_spi_remove, "SPI_PXA2xx");
+ 
++#define LPSS_PRIV_RESETS		0x04
++#define LPSS_PRIV_RESETS_FUNC		BIT(0)
++#define LPSS_PRIV_RESETS_IDMA		BIT(1)
++#define LPSS_PRIV_CTX_REGS		6	/* 0x00..0x14; 0x18 (CS) redone by lpss_ssp_setup() */
++
++static void lpss_ssp_save_ctx(struct driver_data *drv_data)
++{
++	int i;
++
++	if (!is_lpss_ssp(drv_data) || !drv_data->lpss_base)
++		return;
++	for (i = 0; i < LPSS_PRIV_CTX_REGS; i++)
++		drv_data->lpss_priv_ctx[i] = __lpss_ssp_read_priv(drv_data, i * 4);
++	drv_data->lpss_ctx_valid = true;
++}
++
++static void lpss_ssp_restore_ctx(struct driver_data *drv_data)
++{
++	int i;
++
++	if (!is_lpss_ssp(drv_data) || !drv_data->lpss_base || !drv_data->lpss_ctx_valid)
++		return;
++	/* Take the block out of reset before touching anything else */
++	__lpss_ssp_write_priv(drv_data, LPSS_PRIV_RESETS,
++			      LPSS_PRIV_RESETS_FUNC | LPSS_PRIV_RESETS_IDMA);
++	for (i = 0; i < LPSS_PRIV_CTX_REGS; i++)
++		__lpss_ssp_write_priv(drv_data, i * 4, drv_data->lpss_priv_ctx[i]);
++	lpss_ssp_setup(drv_data);
++}
++
+ static int pxa2xx_spi_suspend(struct device *dev)
+ {
+ 	struct driver_data *drv_data = dev_get_drvdata(dev);
+@@ -1491,6 +1524,10 @@
+ 
+ 	pxa_ssp_disable(ssp);
+ 
++	WRITE_ONCE(drv_data->suspended, true);
++	synchronize_irq(ssp->irq);
++	lpss_ssp_save_ctx(drv_data);
++
+ 	if (!pm_runtime_suspended(dev))
+ 		clk_disable_unprepare(ssp->clk);
+ 
+@@ -1510,8 +1547,16 @@
+ 			return status;
+ 	}
+ 
++	lpss_ssp_restore_ctx(drv_data);
++	WRITE_ONCE(drv_data->suspended, false);
++
+ 	/* Start the queue running */
+-	return spi_controller_resume(drv_data->controller);
++	status = spi_controller_resume(drv_data->controller);
++	if (status) {
++		WRITE_ONCE(drv_data->suspended, true);
++		synchronize_irq(ssp->irq);
++	}
++	return status;
+ }
+ 
+ static int pxa2xx_spi_runtime_suspend(struct device *dev)
+--- a/drivers/spi/spi-pxa2xx.h
++++ b/drivers/spi/spi-pxa2xx.h
+@@ -72,6 +72,11 @@
+ 
+ 	void __iomem *lpss_base;
+ 
++	/* LPSS private register context saved across system sleep */
++	u32 lpss_priv_ctx[6];
++	bool lpss_ctx_valid;
++	bool suspended;
++
+ 	/* Optional slave FIFO ready signal */
+ 	struct gpio_desc *gpiod_ready;
+ };
+--- a/drivers/spi/spi-pxa2xx-pci.c
++++ b/drivers/spi/spi-pxa2xx-pci.c
+@@ -7,6 +7,7 @@
+  */
+ #include <linux/clk-provider.h>
+ #include <linux/device.h>
++#include <linux/dmi.h>
+ #include <linux/err.h>
+ #include <linux/module.h>
+ #include <linux/pci.h>
+@@ -93,6 +94,35 @@
+ 	pci_dev_put(dma_dev);
+ }
+ 
++static bool force_pio;
++module_param(force_pio, bool, 0444);
++MODULE_PARM_DESC(force_pio, "Disable DMA and use PIO for all transfers");
++
++static const struct dmi_system_id pxa2xx_spi_pci_no_dma[] = {
++	{
++		/* MacBook8,1: LPSS DMA handshake/IRQs never complete (bz 108331) */
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Apple Inc."),
++			DMI_MATCH(DMI_PRODUCT_NAME, "MacBook8,1"),
++		},
++	},
++	{ }
++};
++
++static bool pxa2xx_spi_pci_no_dma_quirk(void)
++{
++	return force_pio || dmi_check_system(pxa2xx_spi_pci_no_dma);
++}
++
++static bool pxa2xx_spi_pci_can_dma(struct pci_dev *dev)
++{
++	if (pxa2xx_spi_pci_no_dma_quirk()) {
++		dev_info(&dev->dev, "DMA disabled (MacBook8,1 quirk / force_pio), using PIO\n");
++		return false;
++	}
++	return true;
++}
++
+ static int lpss_spi_setup(struct pci_dev *dev, struct pxa2xx_spi_controller *c)
+ {
+ 	struct ssp_device *ssp = &c->ssp;
+@@ -166,7 +196,7 @@
+ 
+ 	c->dma_filter = lpss_dma_filter;
+ 	c->dma_burst_size = 1;
+-	c->enable_dma = 1;
++	c->enable_dma = pxa2xx_spi_pci_can_dma(dev);
+ 	return 0;
+ }
+ 
+@@ -238,7 +268,7 @@
+ 
+ 	c->dma_filter = lpss_dma_filter;
+ 	c->dma_burst_size = 8;
+-	c->enable_dma = 1;
++	c->enable_dma = pxa2xx_spi_pci_can_dma(dev);
+ 	return 0;
+ }
+ 
+@@ -303,7 +333,9 @@
+ 	pm_runtime_set_autosuspend_delay(&dev->dev, 50);
+ 	pm_runtime_use_autosuspend(&dev->dev);
+ 	pm_runtime_put_autosuspend(&dev->dev);
+-	pm_runtime_allow(&dev->dev);
++	/* Runtime-suspended LPSS + PIO MMIO access hangs the bus on MacBook8,1 */
++	if (!pxa2xx_spi_pci_no_dma_quirk())
++		pm_runtime_allow(&dev->dev);
+ 
+ 	return 0;
+ }

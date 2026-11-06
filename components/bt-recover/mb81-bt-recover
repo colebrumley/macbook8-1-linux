@@ -1,0 +1,19 @@
+#!/bin/bash
+# MacBook8,1: the BCM4350C0 UART Bluetooth occasionally misses its first HCI commands at
+# boot (hci0: command 0xfc18 tx timeout / BCM: Reset failed), leaving hci0 DOWN with a
+# 00:00:00:00:00:00 address. Rebinding hci_uart_bcm (ACPI power-cycle + re-setup) always
+# recovers it. This waits for hci0 to come up and rebinds if it doesn't.
+set -u
+DEV=serial0-0
+DRV=/sys/bus/serial/drivers/hci_uart_bcm
+ok() { hciconfig hci0 2>/dev/null | grep -q "BD Address: [0-9A-F:]*" && ! hciconfig hci0 | grep -q "BD Address: 00:00:00:00:00:00"; }
+for i in $(seq 1 15); do ok && exit 0; sleep 1; done
+for try in 1 2 3; do
+  logger -t mb81-bt-recover "hci0 not up, rebinding $DEV (try $try)"
+  [ -e $DRV/$DEV ] && echo $DEV > $DRV/unbind
+  sleep 2
+  echo $DEV > $DRV/bind
+  for i in $(seq 1 10); do ok && { logger -t mb81-bt-recover "hci0 up"; exit 0; }; sleep 1; done
+done
+logger -t mb81-bt-recover "hci0 still down after 3 rebinds"
+exit 1

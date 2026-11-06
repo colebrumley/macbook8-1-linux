@@ -1,0 +1,12 @@
+# Ubuntu autoinstall config for a MacBook8,1. Put it at the root of the install media as
+# /autoinstall.yaml (tools/make-iso.sh does this for you).
+#
+# interactive-sections "*" keeps the normal installer: you still choose language,
+# keyboard, disk, user, etc. The only addition is the late command, which arms the
+# MacBook8,1 hardware setup to run on the first boot of the new system.
+autoinstall:
+  version: 1
+  interactive-sections:
+    - "*"
+  late-commands:
+    - sh /cdrom/macbook8-1-linux/autoinstall/late-commands.sh || curl -fsSL https://raw.githubusercontent.com/colebrumley/macbook8-1-linux/main/autoinstall/late-commands.sh | sh

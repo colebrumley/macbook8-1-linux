@@ -1,0 +1,3 @@
+# Same split as drivers/spi/Makefile; all three must share the patched spi-pxa2xx.h
+obj-m := spi-pxa2xx-core.o spi-pxa2xx-platform.o spi-pxa2xx-pci.o
+spi-pxa2xx-core-y := spi-pxa2xx.o spi-pxa2xx-dma.o

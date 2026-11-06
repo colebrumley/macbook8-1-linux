@@ -1,0 +1,299 @@
+--- a/sound/hda/codecs/cirrus/cs420x.c
++++ b/sound/hda/codecs/cirrus/cs420x.c
+@@ -16,10 +16,15 @@
+ #include "hda_auto_parser.h"
+ #include "hda_jack.h"
+ #include "../generic.h"
++#include <linux/delay.h>
++#include <linux/dmi.h>
+ 
+ struct cs_spec {
+ 	struct hda_gen_spec gen;
+ 
++	unsigned int mb81:1;	/* MacBook8,1 TDM speaker fixup active */
++	unsigned int mb81_playing:1;	/* TDM speaker PCM prepared */
++
+ 	unsigned int gpio_mask;
+ 	unsigned int gpio_dir;
+ 	unsigned int gpio_data;
+@@ -250,6 +255,8 @@
+ 	cs_vendor_coef_set(codec, IDX_SPDIF_CTL, coef);
+ }
+ 
++static void mb81_write_efi_coefs(struct hda_codec *codec);
++
+ static int cs_init(struct hda_codec *codec)
+ {
+ 	struct cs_spec *spec = codec->spec;
+@@ -260,6 +267,8 @@
+ 		snd_hda_sequence_write(codec, cs_coef_init_verbs);
+ 	} else if (spec->vendor_nid == CS4208_VENDOR_NID) {
+ 		snd_hda_sequence_write(codec, cs4208_coef_init_verbs);
++		if (spec->mb81)
++			mb81_write_efi_coefs(codec);
+ 	}
+ 
+ 	snd_hda_gen_init(codec);
+@@ -559,10 +568,12 @@
+ 	CS4208_MBP11,
+ 	CS4208_MACMINI,
+ 	CS4208_GPIO0,
++	CS4208_MB81,
+ };
+ 
+ static const struct hda_model_fixup cs4208_models[] = {
+ 	{ .id = CS4208_GPIO0, .name = "gpio0" },
++	{ .id = CS4208_MB81, .name = "mb81" },
+ 	{ .id = CS4208_MBA6, .name = "mba6" },
+ 	{ .id = CS4208_MBP11, .name = "mbp11" },
+ 	{ .id = CS4208_MACMINI, .name = "macmini" },
+@@ -578,6 +589,8 @@
+ /* codec SSID matching */
+ static const struct hda_quirk cs4208_mac_fixup_tbl[] = {
+ 	SND_PCI_QUIRK(0x106b, 0x5e00, "MacBookPro 11,2", CS4208_MBP11),
++	/* codec SSID: must precede the 8086:7270 PCI-SSID entry, which this machine also matches */
++	HDA_CODEC_QUIRK(0x106b, 0x6400, "MacBook 8,1", CS4208_MB81),
+ 	SND_PCI_QUIRK(0x106b, 0x6c00, "MacMini 7,1", CS4208_MACMINI),
+ 	SND_PCI_QUIRK(0x106b, 0x7100, "MacBookAir 6,1", CS4208_MBA6),
+ 	SND_PCI_QUIRK(0x106b, 0x7200, "MacBookAir 6,2", CS4208_MBA6),
+@@ -611,7 +624,10 @@
+ 		return;
+ 
+ 	codec->fixup_id = HDA_FIXUP_ID_NOT_SET;
+-	snd_hda_pick_fixup(codec, NULL, cs4208_mac_fixup_tbl, cs4208_fixups);
++	if (dmi_match(DMI_SYS_VENDOR, "Apple Inc.") && dmi_match(DMI_PRODUCT_NAME, "MacBook8,1"))
++		codec->fixup_id = CS4208_MB81;
++	else
++		snd_hda_pick_fixup(codec, NULL, cs4208_mac_fixup_tbl, cs4208_fixups);
+ 	if (codec->fixup_id == HDA_FIXUP_ID_NOT_SET)
+ 		codec->fixup_id = CS4208_GPIO0; /* default fixup */
+ 	snd_hda_apply_fixup(codec, action);
+@@ -665,6 +681,188 @@
+ 	}
+ }
+ 
++/*
++ * MacBook8,1: speakers via TDM (DAC 0x0a -> pin 0x1d), GPIO0 = amp mute (active high)
++ */
++#define MB81_TDM_NID		0x0a
++#define MB81_TDM_PIN		0x1d
++#define MB81_HP_PIN		0x10
++#define MB81_GPIO_AMP_EN	0x01	/* GPIO0: class-D amp enable, active high */
++#define MB81_GPIO_MASK		0x09	/* as left by EFI: GPIO0 (amp enable) + GPIO3 (status, input) */
++#define MB81_AMP_PRE_DELAY_MS	75	/* Apple layout: AmpPreDelay */
++#define MB81_VERB_SET_TDM_EN	0x7f0	/* vendor verb on NID 0x24; reads back via 0xff0 */
++
++/*
++ * Every pin explicitly: EFI programs the pin defaults at boot, but any codec reset
++ * (driver reload, some resume paths) brings back chip defaults that make the parser
++ * bring up stray inputs. Only DMIC1 (internal) and the headset-jack mic are inputs.
++ */
++static const struct hda_pintbl mb81_pincfgs[] = {
++	{ 0x10, 0x032b401f },	/* HP out jack (EFI value) */
++	{ 0x11, 0x411111f0 },	/* analog speaker pins: not connected on this board */
++	{ 0x12, 0x411111f0 },
++	{ 0x13, 0x411111f0 },
++	{ 0x14, 0x411111f0 },
++	{ 0x15, 0x411111f0 },
++	{ 0x16, 0x411111f0 },
++	{ 0x17, 0x411111f0 },
++	{ 0x18, 0x03ab4057 },	/* headset-jack mic (EFI value); its bias sets coef 0x1f bit 10, harmless (F-10) */
++	{ 0x19, 0x90a00070 },	/* DMIC1: internal mic */
++	{ 0x1a, 0x411111f0 },
++	{ 0x1b, 0x411111f0 },
++	{ 0x1c, 0x411111f0 },
++	{ 0x1d, 0x90400010 },	/* TDM speaker link: internal, fixed, digital out */
++	{ 0x1e, 0x411111f0 },
++	{ 0x1f, 0x411111f0 },
++	{ 0x20, 0x411111f0 },
++	{ 0x21, 0x411111f0 },
++	{ 0x22, 0x411111f0 },
++	{ }
++};
++
++/* EFI codec state (vendor coefs on NID 0x24), minus status reg 0x1f */
++static const unsigned short mb81_efi_coefs[][2] = {
++	{ 0x00, 0x00c4 }, { 0x02, 0x003a }, { 0x03, 0x0baa }, { 0x04, 0x0c04 },
++	{ 0x05, 0x1000 }, { 0x06, 0x9f9f }, { 0x07, 0x9f9f }, { 0x08, 0x1f1f },
++	{ 0x09, 0x1f1f }, { 0x0a, 0x1f1f }, { 0x0b, 0x1f1f }, { 0x0c, 0x9f9f },
++	{ 0x0d, 0x9f9f }, { 0x0e, 0x9f9f }, { 0x0f, 0x9f9f }, { 0x10, 0x1f1f },
++	{ 0x11, 0x1f1f }, { 0x12, 0x1f1f }, { 0x13, 0x1f1f }, { 0x18, 0x0400 },
++	{ 0x19, 0x0088 }, { 0x1a, 0x00f3 }, { 0x1b, 0x0002 }, { 0x1c, 0x0103 },
++	{ 0x1d, 0x0bdf }, { 0x1e, 0x016d }, { 0x22, 0x0080 }, { 0x25, 0x0001 },
++	{ 0x33, 0x0821 }, { 0x34, 0x3b21 }, { 0x36, 0x0034 },
++};
++
++static const struct hda_pcm_stream mb81_tdm_playback = {
++	.substreams = 1,
++	.channels_min = 4,
++	.channels_max = 4,
++	.rates = SNDRV_PCM_RATE_44100,	/* 48 kHz on 0x0a latches the PLL fault */
++	.formats = SNDRV_PCM_FMTBIT_S16_LE,
++	.maxbps = 16,
++};
++
++static void mb81_write_efi_coefs(struct hda_codec *codec)
++{
++	int i;
++
++	snd_hda_codec_write(codec, CS4208_VENDOR_NID, 0, AC_VERB_SET_PROC_STATE, 1);
++	for (i = 0; i < ARRAY_SIZE(mb81_efi_coefs); i++)
++		cs_vendor_coef_set(codec, mb81_efi_coefs[i][0], mb81_efi_coefs[i][1]);
++}
++
++/*
++ * GPIO4/GPIO5 switch the amp's supply rails (Apple layout: "CH DFET", "US DFET").
++ * EFI leaves them as inputs (external pulls keep the rails up). Experimental control
++ * for bringing the amp back after deep S3, see FINDINGS F-14.
++ */
++static unsigned int mb81_rail_mask;	/* which of GPIO4/5 (0x30) the driver drives */
++module_param(mb81_rail_mask, uint, 0644);
++MODULE_PARM_DESC(mb81_rail_mask, "MacBook8,1: codec GPIOs (amp rails) to drive as outputs (0 = leave as inputs)");
++static unsigned int mb81_rail_data;
++module_param(mb81_rail_data, uint, 0644);
++MODULE_PARM_DESC(mb81_rail_data, "MacBook8,1: level for the driven amp-rail GPIOs");
++
++/* amp on only while the speaker PCM runs and no headphone is plugged in */
++static bool mb81_update_amp(struct hda_codec *codec)
++{
++	struct cs_spec *spec = codec->spec;
++	bool on = spec->mb81_playing && !snd_hda_jack_detect(codec, MB81_HP_PIN);
++	bool was = spec->gpio_data & MB81_GPIO_AMP_EN;
++	unsigned int rails = mb81_rail_mask & 0x30;
++
++	spec->gpio_mask = MB81_GPIO_MASK | rails;
++	spec->gpio_dir = MB81_GPIO_AMP_EN | rails;
++	spec->gpio_data = (on ? MB81_GPIO_AMP_EN : 0) | (mb81_rail_data & rails);
++	snd_hda_codec_write(codec, 0x01, 0, AC_VERB_SET_GPIO_MASK, spec->gpio_mask);
++	snd_hda_codec_write(codec, 0x01, 0, AC_VERB_SET_GPIO_DIRECTION, spec->gpio_dir);
++	snd_hda_codec_write(codec, 0x01, 0, AC_VERB_SET_GPIO_DATA, spec->gpio_data);
++	return on && !was;
++}
++
++static void mb81_automute(struct hda_codec *codec)
++{
++	snd_hda_gen_update_outputs(codec);
++	mb81_update_amp(codec);
++}
++
++static int mb81_tdm_prepare(struct hda_pcm_stream *hinfo, struct hda_codec *codec,
++			    unsigned int stream_tag, unsigned int format,
++			    struct snd_pcm_substream *substream)
++{
++	struct cs_spec *spec = codec->spec;
++	int err;
++
++	err = snd_hda_multi_out_dig_prepare(codec, &spec->gen.multiout,
++					    stream_tag, format, substream);
++	if (err < 0)
++		return err;
++	/* replay the EFI chime path: coef image, amp-block ungate workaround, TDM enable */
++	mb81_write_efi_coefs(codec);
++	cs_vendor_coef_set(codec, 0x40, 0x9999);	/* test mode on: exposes 0x41-0x6b */
++	cs_vendor_coef_set(codec, 0x50, 0x00cb);
++	cs_vendor_coef_set(codec, 0x40, 0x0000);	/* test mode off */
++	snd_hda_codec_write(codec, CS4208_VENDOR_NID, 0, MB81_VERB_SET_TDM_EN, 1);
++	/* the state EFI leaves for the chime: DigEn + Copy, category 0x01 */
++	snd_hda_codec_write(codec, MB81_TDM_NID, 0, AC_VERB_SET_DIGI_CONVERT_1, 0x11);
++	snd_hda_codec_write(codec, MB81_TDM_NID, 0, AC_VERB_SET_DIGI_CONVERT_2, 0x01);
++	snd_hda_codec_write(codec, MB81_TDM_PIN, 0, AC_VERB_SET_CONNECT_SEL, 0);
++	snd_hda_set_pin_ctl_cache(codec, MB81_TDM_PIN, PIN_OUT);
++	spec->mb81_playing = 1;
++	if (mb81_update_amp(codec))
++		msleep(MB81_AMP_PRE_DELAY_MS);
++	return 0;
++}
++
++static int mb81_tdm_cleanup(struct hda_pcm_stream *hinfo, struct hda_codec *codec,
++			    struct snd_pcm_substream *substream)
++{
++	struct cs_spec *spec = codec->spec;
++
++	spec->mb81_playing = 0;
++	mb81_update_amp(codec);
++	return snd_hda_multi_out_dig_cleanup(codec, &spec->gen.multiout);
++}
++
++/* never let the analog stream share (and re-clock) the TDM converter */
++static int mb81_share_spdif_put(struct snd_kcontrol *kcontrol,
++				struct snd_ctl_elem_value *ucontrol)
++{
++	ucontrol->value.integer.value[0] = 0;
++	return 0;
++}
++
++static void cs4208_fixup_mb81(struct hda_codec *codec,
++			      const struct hda_fixup *fix, int action)
++{
++	struct cs_spec *spec = codec->spec;
++	struct snd_kcontrol *kctl;
++	unsigned int wcaps;
++
++	switch (action) {
++	case HDA_FIXUP_ACT_PRE_PROBE:
++		snd_hda_apply_pincfgs(codec, mb81_pincfgs);
++		spec->mb81 = 1;
++		spec->gpio_eapd_hp = 0;
++		spec->gpio_eapd_speaker = 0;
++		spec->gpio_mask = MB81_GPIO_MASK;
++		spec->gpio_dir = MB81_GPIO_AMP_EN;
++		spec->gpio_data = 0;
++		spec->gen.automute_hook = mb81_automute;
++		spec->gen.stream_digital_playback = &mb81_tdm_playback;
++		/* 0x0a reports 8 channels; the TDM link carries 4 */
++		wcaps = get_wcaps(codec, MB81_TDM_NID);
++		wcaps = (wcaps & ~AC_WCAP_CHAN_CNT_EXT) | (1 << 13);
++		snd_hda_override_wcaps(codec, MB81_TDM_NID, wcaps);
++		break;
++	case HDA_FIXUP_ACT_BUILD:
++		spec->gen.multiout.share_spdif = 0;
++		kctl = snd_hda_find_mixer_ctl(codec, "IEC958 Default PCM Playback Switch");
++		if (kctl)
++			kctl->put = mb81_share_spdif_put;
++		break;
++	}
++}
++
+ static const struct hda_fixup cs4208_fixups[] = {
+ 	[CS4208_MBA6] = {
+ 		.type = HDA_FIXUP_PINS,
+@@ -684,6 +882,10 @@
+ 		.chained = true,
+ 		.chain_id = CS4208_GPIO0,
+ 	},
++	[CS4208_MB81] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = cs4208_fixup_mb81,
++	},
+ 	[CS4208_GPIO0] = {
+ 		.type = HDA_FIXUP_FUNC,
+ 		.v.func = cs4208_fixup_gpio0,
+@@ -752,11 +954,27 @@
+ 	return err;
+ }
+ 
++static int cs_build_pcms(struct hda_codec *codec)
++{
++	struct cs_spec *spec = codec->spec;
++	int err = snd_hda_gen_build_pcms(codec);
++
++	if (err < 0)
++		return err;
++	if (spec->mb81 && spec->gen.pcm_rec[1]) {
++		struct hda_pcm_stream *st = &spec->gen.pcm_rec[1]->stream[SNDRV_PCM_STREAM_PLAYBACK];
++
++		st->ops.prepare = mb81_tdm_prepare;
++		st->ops.cleanup = mb81_tdm_cleanup;
++	}
++	return 0;
++}
++
+ static const struct hda_codec_ops cs_codec_ops = {
+ 	.probe = cs_codec_probe,
+ 	.remove = snd_hda_gen_remove,
+ 	.build_controls = cs_build_controls,
+-	.build_pcms = snd_hda_gen_build_pcms,
++	.build_pcms = cs_build_pcms,
+ 	.init = cs_init,
+ 	.unsol_event = snd_hda_jack_unsol_event,
+ 	.stream_pm = snd_hda_gen_stream_pm,

@@ -1,0 +1,14 @@
+[Unit]
+Description=macbook8-1-linux: first-boot hardware setup for MacBook8,1
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/mb81-linux/firstboot-done
+
+[Service]
+Type=oneshot
+TimeoutStartSec=3600
+ExecStart=/opt/macbook8-1-linux/components/firstboot/mb81-firstboot
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

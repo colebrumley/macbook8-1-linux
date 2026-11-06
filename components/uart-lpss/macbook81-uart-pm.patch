@@ -1,0 +1,45 @@
+--- a/drivers/tty/serial/8250/8250_lpss.c
++++ b/drivers/tty/serial/8250/8250_lpss.c
+@@ -420,11 +420,42 @@
+ };
+ MODULE_DEVICE_TABLE(pci, pci_ids);
+ 
++#define LPSS_PRV_RESETS			0x804
++#define LPSS_PRV_RESETS_FUNC		BIT(0)
++#define LPSS_PRV_RESETS_IDMA		BIT(1)
++
++static int lpss8250_suspend(struct device *dev)
++{
++	struct lpss8250 *lpss = dev_get_drvdata(dev);
++
++	serial8250_suspend_port(lpss->data.line);
++	return 0;
++}
++
++static int lpss8250_resume(struct device *dev)
++{
++	struct lpss8250 *lpss = dev_get_drvdata(dev);
++	struct uart_8250_port *up = serial8250_get_port(lpss->data.line);
++
++	if (lpss->board == &byt_board) {
++		/* Power well was cut: the block is held in reset, private regs lost */
++		writel(LPSS_PRV_RESETS_FUNC | LPSS_PRV_RESETS_IDMA,
++		       up->port.membase + LPSS_PRV_RESETS);
++		writel(BYT_TX_OVF_INT_MASK, up->port.membase + BYT_TX_OVF_INT);
++	}
++
++	serial8250_resume_port(lpss->data.line);
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(lpss8250_pm_ops, lpss8250_suspend, lpss8250_resume);
++
+ static struct pci_driver lpss8250_pci_driver = {
+ 	.name           = "8250_lpss",
+ 	.id_table       = pci_ids,
+ 	.probe          = lpss8250_probe,
+ 	.remove         = lpss8250_remove,
++	.driver.pm      = pm_sleep_ptr(&lpss8250_pm_ops),
+ };
+ 
+ module_pci_driver(lpss8250_pci_driver);

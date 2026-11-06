@@ -1,0 +1,4 @@
+#!/bin/sh
+# macbook8-1-linux: after resume, make sure Bluetooth came back (see mb81-bt-recover)
+[ "$1" = post ] && systemctl start --no-block mb81-bt-recover.service
+exit 0
