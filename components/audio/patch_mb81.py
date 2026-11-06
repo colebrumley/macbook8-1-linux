@@ -4,6 +4,8 @@ Speakers on this machine are NOT on the analog DACs: converter 0x0a drives pin 0
 4-slot TDM link to the class-D amp. The internal mic is DMIC1 on pin 0x19.
 Verified by acoustic loopback (scripts/test-audio.sh): 1 kHz on hw:PCH,1 is recorded by
 the internal mic at +61 dB over neighbouring bins with GPIO0 high, room noise with it low.
+  * Converter 0x0a's channel count (SET_CVT_CHAN_COUNT) must be set to 4: EFI sets it,
+    codec resets keep it, deep S3 power loss clears it (found in Apple's EFI HDA driver).
 Findings (docs/FINDINGS.md F-9) that shape this fixup:
   * GPIO0 is the class-D amp ENABLE, active high. EFI parks it low after the chime. The
     stock driver drives it high but never enables the TDM converter, so it is silent too.
@@ -120,38 +122,15 @@ static void mb81_write_efi_coefs(struct hda_codec *codec)
 		cs_vendor_coef_set(codec, mb81_efi_coefs[i][0], mb81_efi_coefs[i][1]);
 }
 
-/*
- * GPIO4/GPIO5 switch the amp's supply rails (Apple layout: "CH DFET", "US DFET").
- * EFI leaves them as inputs (external pulls keep the rails up). Experimental control
- * for bringing the amp back after deep S3, see FINDINGS F-14.
- */
-static unsigned int mb81_rail_mask;	/* which of GPIO4/5 (0x30) the driver drives */
-module_param(mb81_rail_mask, uint, 0644);
-MODULE_PARM_DESC(mb81_rail_mask, "MacBook8,1: codec GPIOs (amp rails) to drive as outputs (0 = leave as inputs)");
-static unsigned int mb81_rail_data;
-module_param(mb81_rail_data, uint, 0644);
-MODULE_PARM_DESC(mb81_rail_data, "MacBook8,1: level for the driven amp-rail GPIOs");
-
-static bool mb81_amp_manual;	/* experiment: never drive GPIO0, leave it to the user */
-module_param(mb81_amp_manual, bool, 0644);
-MODULE_PARM_DESC(mb81_amp_manual, "MacBook8,1: don't drive the amp-enable GPIO (experiments only)");
-
 /* amp on only while the speaker PCM runs and no headphone is plugged in */
 static bool mb81_update_amp(struct hda_codec *codec)
 {
 	struct cs_spec *spec = codec->spec;
 	bool on = spec->mb81_playing && !snd_hda_jack_detect(codec, MB81_HP_PIN);
 
-	if (mb81_amp_manual)
-		return false;
 	bool was = spec->gpio_data & MB81_GPIO_AMP_EN;
-	unsigned int rails = mb81_rail_mask & 0x36;	/* GPIO1, GPIO2, GPIO4, GPIO5 */
 
-	spec->gpio_mask = MB81_GPIO_MASK | rails;
-	spec->gpio_dir = MB81_GPIO_AMP_EN | rails;
-	spec->gpio_data = (on ? MB81_GPIO_AMP_EN : 0) | (mb81_rail_data & rails);
-	snd_hda_codec_write(codec, 0x01, 0, AC_VERB_SET_GPIO_MASK, spec->gpio_mask);
-	snd_hda_codec_write(codec, 0x01, 0, AC_VERB_SET_GPIO_DIRECTION, spec->gpio_dir);
+	spec->gpio_data = on ? MB81_GPIO_AMP_EN : 0;
 	snd_hda_codec_write(codec, 0x01, 0, AC_VERB_SET_GPIO_DATA, spec->gpio_data);
 	return on && !was;
 }
@@ -182,6 +161,14 @@ static int mb81_tdm_prepare(struct hda_pcm_stream *hinfo, struct hda_codec *code
 	/* the state EFI leaves for the chime: DigEn + Copy, category 0x01 */
 	snd_hda_codec_write(codec, MB81_TDM_NID, 0, AC_VERB_SET_DIGI_CONVERT_1, 0x11);
 	snd_hda_codec_write(codec, MB81_TDM_NID, 0, AC_VERB_SET_DIGI_CONVERT_2, 0x01);
+	/*
+	 * The 4-slot TDM link needs the converter's channel count set (EFI does this with
+	 * SET_CVT_CHAN_COUNT). It survives codec resets, so it looked "always right", but a
+	 * real power loss (deep S3) resets it to 0 and the amp then gets malformed frames:
+	 * silent speakers after resume. Generic HDA code only sets it for HDMI.
+	 */
+	snd_hda_codec_write(codec, MB81_TDM_NID, 0, AC_VERB_SET_CVT_CHAN_COUNT,
+			    substream->runtime->channels - 1);
 	snd_hda_codec_write(codec, MB81_TDM_PIN, 0, AC_VERB_SET_CONNECT_SEL, 0);
 	snd_hda_set_pin_ctl_cache(codec, MB81_TDM_PIN, PIN_OUT);
 	spec->mb81_playing = 1;

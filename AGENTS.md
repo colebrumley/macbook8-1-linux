@@ -37,7 +37,7 @@ These rules apply to people and to coding agents alike.
 ## Sound tests are audible
 
 `scripts/test-audio.sh`, `audio-route-probe.sh`, `mic-probe.sh`, `mb81-audio-live.sh`,
-`mb81-amp-*.sh` and `test-suspend.sh` with `AUDIO=1` play tones on the speakers. Someone may be
+`test-suspend.sh` with `AUDIO=1` play tones on the speakers. Someone may be
 sitting next to the machine. Only run them with the owner's OK, keep levels low, and never loop.
 
 ## Layout
