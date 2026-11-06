@@ -138,7 +138,7 @@ static bool mb81_update_amp(struct hda_codec *codec)
 	struct cs_spec *spec = codec->spec;
 	bool on = spec->mb81_playing && !snd_hda_jack_detect(codec, MB81_HP_PIN);
 	bool was = spec->gpio_data & MB81_GPIO_AMP_EN;
-	unsigned int rails = mb81_rail_mask & 0x30;
+	unsigned int rails = mb81_rail_mask & 0x36;	/* GPIO1, GPIO2, GPIO4, GPIO5 */
 
 	spec->gpio_mask = MB81_GPIO_MASK | rails;
 	spec->gpio_dir = MB81_GPIO_AMP_EN | rails;
