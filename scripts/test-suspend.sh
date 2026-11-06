@@ -36,7 +36,17 @@ t0=$(date '+%Y-%m-%d %H:%M:%S')
 log "suspending for ${SLEEP}s at $t0 (mem_sleep: $(cat /sys/power/mem_sleep))"
 capture pre
 sync
-if ! rtcwake -m mem -s "$SLEEP"; then fail+=("rtcwake failed"); fi
+# Suspend the way a lid close does (systemctl suspend), so systemd-sleep hooks run;
+# `rtcwake -m mem` would write /sys/power/state directly and skip them. Wake by RTC alarm.
+echo 0 > /sys/class/rtc/rtc0/wakealarm
+echo "+$SLEEP" > /sys/class/rtc/rtc0/wakealarm
+if ! systemctl suspend; then fail+=("systemctl suspend failed"); fi
+# systemctl suspend returns once the sleep job is queued: wait for the resume
+for i in $(seq 1 $((SLEEP + 120))); do
+  journalctl -k --since "$t0" --no-pager | grep -q "PM: suspend exit" && break
+  sleep 1
+done
+sleep 2
 log "resumed at $(date '+%H:%M:%S')"
 
 # give drivers and NetworkManager time to come back
