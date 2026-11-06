@@ -1,0 +1,12 @@
+#!/bin/sh
+# macbook8-1-linux: after a deep-S3 resume, the Apple S1X NVMe (106b:2001) sometimes comes
+# back losing interrupts ("I/O tag N QID 1 timeout, completion polled", ~1/min, each I/O
+# stalls 30 s). A second controller reset reliably clears it (FINDINGS F-7).
+[ "$1" = post ] || exit 0
+for c in /sys/class/nvme/nvme*; do
+  d=$c/device
+  [ "$(cat $d/vendor 2>/dev/null)" = 0x106b ] && [ "$(cat $d/device 2>/dev/null)" = 0x2001 ] || continue
+  logger -t mb81-nvme-resume "resetting $(basename $c) after resume"
+  echo 1 > $c/reset_controller
+done
+exit 0
