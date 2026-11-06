@@ -18,4 +18,3 @@ i2c-tools
 nvme-cli
 efivar
 7zip
-bluez-deprecated
