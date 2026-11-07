@@ -1,0 +1,11 @@
+[Unit]
+Description=macbook8-1-linux: keyboard backlight keys and level persistence
+After=systemd-udev-settle.service
+
+[Service]
+ExecStart=/usr/local/sbin/mb81-kbd-backlight
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

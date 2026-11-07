@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""MacBook8,1 keyboard backlight keys (Fn+F5 / Fn+F6) for desktops that don't handle them.
+
+GNOME's settings daemon handles KEY_KBDILLUM*; COSMIC (and most tiling WMs) don't. This reads
+the internal keyboard's evdev node, steps spi::kbd_backlight through a few levels, and keeps
+the level across reboots and suspend. Changes go through UPower's KbdBacklight interface
+when it is running, so desktops that listen to it (COSMIC's OSD) show the on-screen slider.
+No dependencies beyond Python's standard library and busctl.
+"""
+import glob
+import os
+import struct
+import subprocess
+import sys
+import time
+
+LED = "/sys/class/leds/spi::kbd_backlight"
+STATE = "/var/lib/mb81-linux/kbd-backlight"
+KEY_TOGGLE, KEY_DOWN, KEY_UP = 228, 229, 230
+EV_KEY = 1
+LEVELS = [0, 8, 16, 32, 64, 96, 144, 200, 255]
+EVENT = struct.Struct("llHHi")  # struct input_event on 64-bit
+
+
+def keyboard():
+    for name in glob.glob("/sys/class/input/event*/device/name"):
+        if open(name).read().strip() == "Apple SPI Keyboard":
+            return "/dev/input/" + name.split("/")[4]
+    return None
+
+
+def get():
+    return int(open(f"{LED}/brightness").read())
+
+
+def put(v):
+    v = max(0, min(int(open(f"{LED}/max_brightness").read()), v))
+    # via UPower: it emits BrightnessChanged, which COSMIC's OSD turns into a slider
+    r = subprocess.run(["busctl", "call", "--system", "org.freedesktop.UPower",
+                        "/org/freedesktop/UPower/KbdBacklight", "org.freedesktop.UPower.KbdBacklight",
+                        "SetBrightness", "i", str(v)], capture_output=True, timeout=5)
+    if r.returncode != 0:
+        open(f"{LED}/brightness", "w").write(str(v))
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    open(STATE, "w").write(str(v))
+
+
+def step(cur, up):
+    if up:
+        return next((l for l in LEVELS if l > cur), LEVELS[-1])
+    return next((l for l in reversed(LEVELS) if l < cur), 0)
+
+
+def restore():
+    try:
+        put(int(open(STATE).read()))
+    except (OSError, ValueError):
+        put(64)
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "restore":
+        restore()
+        return
+    restore()
+    last_on = get() or 64
+    while True:
+        dev = keyboard()
+        if not dev:
+            time.sleep(2)
+            continue
+        try:
+            with open(dev, "rb", buffering=0) as f:
+                while True:
+                    data = f.read(EVENT.size)
+                    if len(data) < EVENT.size:
+                        break
+                    _, _, typ, code, val = EVENT.unpack(data)
+                    if typ != EV_KEY or val == 0 or code not in (KEY_TOGGLE, KEY_DOWN, KEY_UP):
+                        continue
+                    cur = get()
+                    if code == KEY_TOGGLE:
+                        new = 0 if cur else last_on
+                    else:
+                        new = step(cur, code == KEY_UP)
+                    if new:
+                        last_on = new
+                    put(new)
+        except OSError:
+            time.sleep(1)  # device went away (resume, driver reload): find it again
+
+
+if __name__ == "__main__":
+    main()

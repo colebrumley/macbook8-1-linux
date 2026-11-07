@@ -2,6 +2,18 @@
 
 Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-generic), newest first.
 
+## F-15: keyboard backlight keys do nothing under COSMIC
+
+- **Cause.** GNOME's settings daemon handles `KEY_KBDILLUM*`. COSMIC's settings daemon stubs
+  keyboard brightness (`KeyboardBrightness` always returns -1, and increase/decrease are
+  no-ops; upstream `src/main.rs`). The hardware (`spi::kbd_backlight`) is fine.
+- **Fix.** `components/kbd-backlight`: a small evdev service steps the level and applies it
+  through UPower `KbdBacklight.SetBrightness`. cosmic-osd listens to UPower's
+  `BrightnessChanged`, so the native on-screen slider appears. The level persists across
+  reboot and resume.
+- **Upstream.** Implementing keyboard brightness in cosmic-settings-daemon would make this
+  service unnecessary on COSMIC.
+
 ## F-14: speakers silent after deep S3 — fixed (converter channel count)
 
 - **Symptom.** Loopback passes at boot and fails after any deep-S3 resume. A driver reload

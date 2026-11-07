@@ -99,6 +99,7 @@ Each fix is a component in [`components/`](components/), with its root cause and
 | `camera` | `facetimehd` driver and firmware |
 | `bt-recover` | rebinds Bluetooth if its UART setup misses at boot/resume |
 | `nvme-resume` | resets the Apple NVMe after resume (it sometimes loses interrupts otherwise) |
+| `kbd-backlight` | Fn+F5/F6 keyboard light on desktops other than GNOME (via UPower, so COSMIC shows its OSD slider); keeps the level across reboot/suspend |
 | `grub` | `intel_iommu=off`, sleep mode |
 | `firstboot` | used by the install-media path: runs the installer once on first boot |
 

@@ -1,0 +1,4 @@
+#!/bin/sh
+# restore the keyboard backlight level after resume (the LED comes back dark)
+[ "$1" = post ] && /usr/local/sbin/mb81-kbd-backlight restore
+exit 0
