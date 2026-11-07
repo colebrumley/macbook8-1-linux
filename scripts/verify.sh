@@ -17,7 +17,10 @@ check() { # id description command...
   local id=$1 desc=$2; shift 2
   want "$id" || return 0
   local out; out=$("$@" 2>&1); local rc=$?
-  if [ $rc -eq 0 ]; then ok "$id" "$desc"; else bad "$id" "$desc${out:+ -- ${out//$'\n'/; }}"; fi
+  # rc 2 = can't be checked right now (e.g. nobody logged in): report MANUAL, not FAIL
+  if [ $rc -eq 0 ]; then ok "$id" "$desc"
+  elif [ $rc -eq 2 ]; then man "$id" "$desc${out:+ -- ${out//$'\n'/; }}"
+  else bad "$id" "$desc${out:+ -- ${out//$'\n'/; }}"; fi
   [ $VERBOSE = 1 ] && [ -n "$out" ] && echo "$out" | sed 's/^/         /'
 }
 # Cache the kernel log once. Never pipe a live command into grep -q under pipefail:
@@ -99,7 +102,7 @@ c_mic() { c_audio; }
 c_sink() {
   # the logged-in desktop session must see the speaker sink, not "Dummy Output" (F-16)
   local uid; uid=$(loginctl list-sessions --no-legend | awk '$4=="seat0" && $2>=1000 {print $2; exit}')
-  [ -n "$uid" ] || { echo "no desktop session logged in; can't check"; return 1; }
+  [ -n "$uid" ] || { echo "no desktop session logged in; log in and re-run"; return 2; }
   sudo -u "#$uid" XDG_RUNTIME_DIR=/run/user/$uid pw-cli ls Node 2>/dev/null | grep -q 'node.name = "macbook_speakers"' \
     || { echo "MacBook Speakers sink missing in the desktop session (Dummy Output)"; return 1; }
 }
