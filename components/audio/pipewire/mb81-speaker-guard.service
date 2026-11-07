@@ -1,0 +1,11 @@
+[Unit]
+Description=macbook8-1-linux: make sure the MacBook Speakers sink exists
+After=pipewire.service wireplumber.service
+PartOf=pipewire.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mb81-speaker-guard
+
+[Install]
+WantedBy=pipewire.service graphical-session.target

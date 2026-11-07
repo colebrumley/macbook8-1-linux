@@ -96,6 +96,13 @@ c_audio() {
   grep -q "^result=ok" $f || { echo "loopback: $(grep -E "^(result|ratio)" $f | tr "\n" " ")"; return 1; }
 }
 c_mic() { c_audio; }
+c_sink() {
+  # the logged-in desktop session must see the speaker sink, not "Dummy Output" (F-16)
+  local uid; uid=$(loginctl list-sessions --no-legend | awk '$4=="seat0" && $2>=1000 {print $2; exit}')
+  [ -n "$uid" ] || { echo "no desktop session logged in; can't check"; return 1; }
+  sudo -u "#$uid" XDG_RUNTIME_DIR=/run/user/$uid pw-cli ls Node 2>/dev/null | grep -q 'node.name = "macbook_speakers"' \
+    || { echo "MacBook Speakers sink missing in the desktop session (Dummy Output)"; return 1; }
+}
 c_cam() {
   ls /dev/video* >/dev/null 2>&1 || { echo "no /dev/video*"; return 1; }
   sudo v4l2-ctl --list-devices 2>/dev/null | grep -qi "facetime" || { echo "no FaceTime device in v4l2"; return 1; }
@@ -189,6 +196,7 @@ want BT-3 && man BT-3 "patchram: n/a, no BCM4350C0 patch exists (FINDINGS F-12)"
 check BT-4  "Bluetooth auto-recovery installed (mb81-bt-recover)" c_btrec
 check AUD-1 "speakers/headphone playback device works"           c_audio
 check AUD-2 "internal microphone records"                        c_mic
+check AUD-4 "desktop session has the MacBook Speakers sink"     c_sink
 check CAM-1 "FaceTime HD camera captures frames"                 c_cam
 check GPU-1 "i915 render + VA-API decode"                        c_gpu
 check DSP-1 "display backlight control"                          c_backlight

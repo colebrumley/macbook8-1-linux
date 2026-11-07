@@ -1,0 +1,17 @@
+#!/bin/bash
+# User-level safety net for the static "MacBook Speakers" sink (FINDINGS F-16): if PipeWire
+# came up without it (card not accessible at that moment), restart PipeWire once the card
+# is accessible. Runs after login and after every PipeWire (re)start.
+set -u
+has_sink() { pw-cli ls Node 2>/dev/null | grep -q 'node.name = "macbook_speakers"'; }
+for i in $(seq 1 30); do            # give PipeWire time to create its objects
+  has_sink && exit 0
+  sleep 1
+done
+# only restart if this user can open the speaker PCM now (seat ACL or audio group);
+# otherwise a restart would fail the same way
+ok=0
+for p in /dev/snd/pcmC*D1p; do [ -e "$p" ] && [ -w "$p" ] && ok=1; done
+[ "$ok" = 1 ] || exit 0
+logger -t mb81-speaker-guard "MacBook Speakers sink missing; restarting PipeWire"
+systemctl --user restart pipewire.service pipewire-pulse.service wireplumber.service

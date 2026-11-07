@@ -41,6 +41,9 @@ for u in $(awk -F: '$3>=1000 && $3<60000 && $7 !~ /(nologin|false)$/ {print $1}'
   id -nG "$u" | grep -qw audio || usermod -aG audio "$u"
 done
 install -D -m 0644 pipewire/60-macbook81-speakers.conf /etc/pipewire/pipewire.conf.d/60-macbook81-speakers.conf
+install -m 0755 pipewire/mb81-speaker-guard /usr/local/bin/mb81-speaker-guard
+install -m 0644 pipewire/mb81-speaker-guard.service /usr/lib/systemd/user/mb81-speaker-guard.service
+systemctl --global enable mb81-speaker-guard.service
 echo "audio: snd-hda-codec-cs420x -> $(modinfo -n snd_hda_codec_cs420x)"
 
 # remove the obsolete forced-profile rule from earlier versions
