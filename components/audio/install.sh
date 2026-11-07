@@ -33,6 +33,13 @@ MK
 dkms add -m $NAME -v "$VER"
 dkms install -m $NAME -v "$VER"
 install -m 0644 mb81-audio.conf /etc/modprobe.d/mb81-audio.conf
+# The speaker sink is a static PipeWire object: if PipeWire starts before the login's
+# seat ACL is applied (e.g. early user-manager start), opening hw:PCH,1 fails once and the
+# desktop is left on "Dummy Output". Membership in "audio" gives desktop users permanent
+# access so it never depends on start order.
+for u in $(awk -F: '$3>=1000 && $3<60000 && $7 !~ /(nologin|false)$/ {print $1}' /etc/passwd); do
+  id -nG "$u" | grep -qw audio || usermod -aG audio "$u"
+done
 install -D -m 0644 pipewire/60-macbook81-speakers.conf /etc/pipewire/pipewire.conf.d/60-macbook81-speakers.conf
 echo "audio: snd-hda-codec-cs420x -> $(modinfo -n snd_hda_codec_cs420x)"
 

@@ -2,6 +2,15 @@
 
 Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-generic), newest first.
 
+## F-16: desktop shows "Dummy Output" (speaker sink missing)
+
+- **Cause.** The MacBook Speakers sink is a static `context.objects` adapter, created once at
+  PipeWire start. When the user's PipeWire started before the seat session (seen: 10 s
+  earlier), opening `hw:PCH,1` failed (`No such device`, no ACL yet), and with `nofail` the
+  sink was skipped and never retried.
+- **Fix.** Desktop users join the `audio` group (components/audio), so PipeWire can open the
+  card whenever it starts.
+
 ## F-15: keyboard backlight keys do nothing under COSMIC
 
 - **Cause.** GNOME's settings daemon handles `KEY_KBDILLUM*`. COSMIC's settings daemon stubs
