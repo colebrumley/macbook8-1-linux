@@ -17,6 +17,8 @@ if [ -d "$DIR/.git" ]; then
 else
   git clone -q --branch "$REF" "$REPO" "$DIR"
 fi
+# root owns the checkout; let any user run git in it (status, log) without "dubious ownership"
+git config --system --get-all safe.directory 2>/dev/null | grep -qx "$DIR" || git config --system --add safe.directory "$DIR"
 echo "macbook8-1-linux $(git -C "$DIR" rev-parse --short HEAD) in $DIR"
 
 "$DIR/install.sh"

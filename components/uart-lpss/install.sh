@@ -1,6 +1,8 @@
 #!/bin/bash
 # 8250_lpss with system-sleep PM ops (see patch_uart.py). Fixes Bluetooth after S3.
 set -euo pipefail
+# The generated patch goes next to the DKMS sources in /usr/src (the copy in this repo is a
+# reference for the vendored kernel tag; installing never modifies the checkout).
 cd "$(dirname "$0")"
 NAME=8250-lpss-pm
 VER=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' dkms.conf)
@@ -20,7 +22,7 @@ mkdir -p "$work/8250"
 cp upstream/$KTAG/8250_lpss.c upstream/$KTAG/8250_dwlib.h upstream/$KTAG/8250.h "$work/8250/"
 cp upstream/$KTAG/serial_mctrl_gpio.h "$work/"
 python3 patch_uart.py "$work/8250/8250_lpss.c"
-diff -u upstream/$KTAG/8250_lpss.c "$work/8250/8250_lpss.c" --label a/drivers/tty/serial/8250/8250_lpss.c --label b/drivers/tty/serial/8250/8250_lpss.c > macbook81-uart-pm.patch || true
+diff -u upstream/$KTAG/8250_lpss.c "$work/8250/8250_lpss.c" --label a/drivers/tty/serial/8250/8250_lpss.c --label b/drivers/tty/serial/8250/8250_lpss.c > "$work/macbook81-uart-pm.patch" || true
 
 for v in $(dkms status -m $NAME 2>/dev/null | sed -n "s|^$NAME/\([^,:]*\)[,:].*|\1|p" | sort -u); do
   dkms remove -m $NAME -v "$v" --all || true; rm -rf "/usr/src/$NAME-$v"

@@ -6,6 +6,8 @@
 #                    -> prevents a watchdog reset on resume
 # Sources in upstream/<kernel tag>/ are vanilla drivers/spi/*.c,h at the running kernel's tag.
 set -euo pipefail
+# The generated patch goes next to the DKMS sources in /usr/src (the copy in this repo is a
+# reference for the vendored kernel tag; installing never modifies the checkout).
 cd "$(dirname "$0")"
 
 NAME=spi-pxa2xx-pio
@@ -24,7 +26,7 @@ work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 for f in "${FILES[@]}"; do cp "upstream/$KTAG/$f" "$work/"; done
 python3 patch_pio.py "$work/spi-pxa2xx-pci.c"
 python3 patch_resume.py "$work/spi-pxa2xx.c" "$work/spi-pxa2xx.h"
-( cd "upstream/$KTAG" && for f in "${FILES[@]}"; do diff -u "$f" "$work/$f" --label "a/drivers/spi/$f" --label "b/drivers/spi/$f" || true; done ) > macbook81.patch
+( cd "upstream/$KTAG" && for f in "${FILES[@]}"; do diff -u "$f" "$work/$f" --label "a/drivers/spi/$f" --label "b/drivers/spi/$f" || true; done ) > "$work/macbook81.patch"
 
 # remove every installed version of this package, then install this one
 for v in $(dkms status -m $NAME 2>/dev/null | sed -n "s|^$NAME/\([^,:]*\)[,:].*|\1|p" | sort -u); do
@@ -33,7 +35,7 @@ for v in $(dkms status -m $NAME 2>/dev/null | sed -n "s|^$NAME/\([^,:]*\)[,:].*|
 done
 mkdir -p "$SRC"
 for f in "${FILES[@]}"; do cp "$work/$f" "$SRC/"; done
-cp dkms.conf "$SRC/"; cp Makefile.kbuild "$SRC/Makefile"
+cp dkms.conf "$SRC/"; cp Makefile.kbuild "$SRC/Makefile"; cp "$work/macbook81.patch" "$SRC/"
 
 dkms add -m $NAME -v "$VER"
 dkms install -m $NAME -v "$VER"

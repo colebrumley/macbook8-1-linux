@@ -1,6 +1,8 @@
 #!/bin/bash
 # CS4208 MacBook8,1 fixup (speakers over TDM, DMIC1 internal mic). See patch_mb81.py.
 set -euo pipefail
+# The generated patch goes next to the DKMS sources in /usr/src (the copy in this repo is a
+# reference for the vendored kernel tag; installing never modifies the checkout).
 cd "$(dirname "$0")"
 NAME=cs4208-mb81
 VER=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' dkms.conf)
@@ -17,7 +19,7 @@ work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 cp -r upstream/$KTAG/. "$work/"
 python3 patch_mb81.py "$work/codecs/cirrus/cs420x.c"
 diff -u upstream/$KTAG/codecs/cirrus/cs420x.c "$work/codecs/cirrus/cs420x.c" \
-  --label a/sound/hda/codecs/cirrus/cs420x.c --label b/sound/hda/codecs/cirrus/cs420x.c > macbook81-cs4208.patch || true
+  --label a/sound/hda/codecs/cirrus/cs420x.c --label b/sound/hda/codecs/cirrus/cs420x.c > "$work/macbook81-cs4208.patch" || true
 
 for v in $(dkms status -m $NAME 2>/dev/null | sed -n "s|^$NAME/\([^,:]*\)[,:].*|\1|p" | sort -u); do
   dkms remove -m $NAME -v "$v" --all || true; rm -rf "/usr/src/$NAME-$v"
