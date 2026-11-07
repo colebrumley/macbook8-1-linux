@@ -7,6 +7,13 @@ set -euo pipefail
 #                     FINDINGS F-14.) For s2idle instead: MB81_SLEEP=s2idle sudo components/grub/install.sh
 SLEEP=${MB81_SLEEP:-deep}
 PARAMS="intel_iommu=off mem_sleep_default=$SLEEP"
+#   mitigations=off  (opt-in: MB81_MITIGATIONS=off) : drops Spectre/Meltdown-class CPU
+#                     mitigations. Big speedup on Broadwell; reopens those side channels
+#                     (realistic vector: hostile JavaScript). Set MB81_MITIGATIONS=auto to undo.
+case "${MB81_MITIGATIONS:-}" in
+  off)  PARAMS="$PARAMS mitigations=off" ;;
+  auto) PARAMS="$PARAMS mitigations=auto" ;;
+esac
 f=/etc/default/grub
 [ -f $f.macbook8-1-linux.orig ] || cp $f $f.macbook8-1-linux.orig
 cur=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/\1/p' $f)
