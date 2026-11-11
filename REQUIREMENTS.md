@@ -17,6 +17,7 @@ the item is done. Status values: `done` (check passes), `open`, `blocked` (reaso
 | AUD-1 | Internal speakers play audio (TDM, 4 ch / 44.1 kHz) and are the desktop default | `verify.sh AUD-1` (`scripts/test-audio.sh`, audible) | done |
 | AUD-2 | Internal microphone records | `verify.sh AUD-2` (same loopback) | done |
 | AUD-3 | Headphone jack: output, speaker amp muted on insertion, headset mic | MAN-1 | manual: headset mic enabled (F-10); needs headphones/headset to confirm |
+| AUD-5 | Speaker codec is present after every boot and resume (the HDA controller is re-probed if it found none) | `verify.sh AUD-5` | done |
 | CAM-1 | FaceTime HD camera (Broadcom 1570) captures video | `verify.sh CAM-1` | done |
 | GPU-1 | i915 3D acceleration and VA-API video decode | `verify.sh GPU-1` | done |
 | DSP-1 | Display brightness control | `verify.sh DSP-1` | done |

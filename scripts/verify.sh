@@ -106,6 +106,11 @@ c_sink() {
   sudo -u "#$uid" XDG_RUNTIME_DIR=/run/user/$uid pw-cli ls Node 2>/dev/null | grep -q 'node.name = "macbook_speakers"' \
     || { echo "MacBook Speakers sink missing in the desktop session (Dummy Output)"; return 1; }
 }
+c_codec() {
+  # the CS4208 must have answered the codec probe, and the re-probe service must be armed (F-17)
+  grep -qs "CS4208" /proc/asound/card*/codec#* || { echo "CS4208 codec not found (dmesg: no codecs found?); run mb81-audio-recover"; return 1; }
+  systemctl is-enabled -q mb81-audio-recover.service || { echo "mb81-audio-recover.service not enabled"; return 1; }
+}
 c_cam() {
   ls /dev/video* >/dev/null 2>&1 || { echo "no /dev/video*"; return 1; }
   sudo v4l2-ctl --list-devices 2>/dev/null | grep -qi "facetime" || { echo "no FaceTime device in v4l2"; return 1; }
@@ -200,6 +205,7 @@ check BT-4  "Bluetooth auto-recovery installed (mb81-bt-recover)" c_btrec
 check AUD-1 "speakers/headphone playback device works"           c_audio
 check AUD-2 "internal microphone records"                        c_mic
 check AUD-4 "desktop session has the MacBook Speakers sink"     c_sink
+check AUD-5 "speaker codec present, re-probe service armed"      c_codec
 check CAM-1 "FaceTime HD camera captures frames"                 c_cam
 check GPU-1 "i915 render + VA-API decode"                        c_gpu
 check DSP-1 "display backlight control"                          c_backlight

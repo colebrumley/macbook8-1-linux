@@ -24,3 +24,9 @@
 - Speakers survive deep S3: the TDM converter's channel count is restored (found in Apple's EFI
   HDA driver). Deep sleep is the default again.
 - NVMe: controller reset after resume (Apple S1X sometimes loses interrupts after deep S3).
+
+## 2026-11-11
+
+- Audio: if the speaker codec is not found at boot ("no codecs found", seen after a forced
+  power-off), `mb81-audio-recover` re-probes the HDA controller and restores sound without a
+  reboot (F-17, `verify.sh AUD-5`).

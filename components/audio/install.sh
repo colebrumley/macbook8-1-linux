@@ -44,6 +44,12 @@ install -D -m 0644 pipewire/60-macbook81-speakers.conf /etc/pipewire/pipewire.co
 install -m 0755 pipewire/mb81-speaker-guard /usr/local/bin/mb81-speaker-guard
 install -m 0644 pipewire/mb81-speaker-guard.service /usr/lib/systemd/user/mb81-speaker-guard.service
 systemctl --global enable mb81-speaker-guard.service
+# re-probe the HDA controller when the codec was not found at boot or after resume (F-17)
+install -m 0755 mb81-audio-recover /usr/local/sbin/mb81-audio-recover
+install -m 0644 mb81-audio-recover.service /etc/systemd/system/mb81-audio-recover.service
+install -m 0755 system-sleep-hook /usr/lib/systemd/system-sleep/mb81-audio-recover
+systemctl daemon-reload
+systemctl enable mb81-audio-recover.service
 echo "audio: snd-hda-codec-cs420x -> $(modinfo -n snd_hda_codec_cs420x)"
 
 # remove the obsolete forced-profile rule from earlier versions

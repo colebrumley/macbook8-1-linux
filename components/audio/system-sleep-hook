@@ -1,0 +1,4 @@
+#!/bin/sh
+# macbook8-1-linux: after resume, make sure the speaker codec is still there (mb81-audio-recover)
+[ "$1" = post ] && systemctl start --no-block mb81-audio-recover.service
+exit 0

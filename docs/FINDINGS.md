@@ -2,6 +2,19 @@
 
 Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-generic), newest first.
 
+## F-17: no sound at all after a forced restart ("no codecs found")
+
+- **Symptom.** After a hang on resume and a forced power-off, the next boot logs
+  `snd_hda_intel 0000:00:1b.0: no codecs found!`. Card `PCH` exists but has no PCMs, PipeWire
+  logs `'hw:PCH,1': playback open failed: No such file or directory`, and every session is on
+  "Dummy Output". Seen once in 14 boots, on the boot that followed the forced power-off.
+- **Cause.** The CS4208 did not answer the controller's codec probe at boot. Not understood
+  further (the codec's state survives a warm reset; a cold power-off was not tried).
+- **Fix.** `mb81-audio-recover` (components/audio) runs at boot and after resume: if a
+  `snd_hda_intel` controller has no codec, it unbinds and rebinds the controller, which found
+  the codec on the first try, then restarts the speaker guard in logged-in sessions so their
+  PipeWire picks up the sink. Check: `verify.sh AUD-5`.
+
 ## F-16: desktop shows "Dummy Output" (speaker sink missing)
 
 - **Cause.** The MacBook Speakers sink is a static `context.objects` adapter, created once at

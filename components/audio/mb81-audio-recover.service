@@ -1,0 +1,10 @@
+[Unit]
+Description=macbook8-1-linux: re-probe the HDA controller if the speaker codec was not found
+After=sound.target systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mb81-audio-recover
+
+[Install]
+WantedBy=multi-user.target
