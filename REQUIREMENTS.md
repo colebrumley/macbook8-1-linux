@@ -27,6 +27,7 @@ the item is done. Status values: `done` (check passes), `open`, `blocked` (reaso
 | PWR-3 | Suspend to RAM and resume, with keyboard, trackpad, Wi-Fi and Bluetooth still working | `verify.sh PWR-3` | done (deep S3 default; speakers, Wi-Fi, BT, NVMe verified after resume) |
 | BT-4 | Bluetooth recovers if its UART setup fails at boot/resume | `verify.sh BT-4` | done |
 | PWR-4 | Lid switch triggers suspend | `verify.sh PWR-4` | done |
+| PWR-5 | Sustained load does not drive the CPU into its 95 °C hard throttle (package power limits) | `verify.sh PWR-5` | done |
 | STO-1 | NVMe (Apple S1X) healthy, power states working | `verify.sh STO-1` | done |
 | USB-1 | USB-C port: charging, USB data, DisplayPort alt-mode output | MAN-1 | manual (port fine; hub latched up once in sleep and recovered on replug, F-8) |
 

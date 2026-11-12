@@ -1,0 +1,9 @@
+[Unit]
+Description=macbook8-1-linux: package power limits for the fanless chassis
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mb81-power-limit
+
+[Install]
+WantedBy=multi-user.target

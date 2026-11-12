@@ -1,0 +1,19 @@
+#!/bin/bash
+# MacBook8,1: the firmware leaves the package power limits at 49 W on a fanless 4.5 W chip,
+# so sustained load (a game) runs at ~8-9 W until the CPU sits at its 95 C limit and
+# hard-throttles, which looks like a frozen machine (FINDINGS F-19). Set sane RAPL limits:
+# bursts at PL2, then PL1 sustained. The window must be short: with the firmware's 28 s
+# window the long-term limit did not engage within 50 s.
+# Override in /etc/default/mb81-power-limit: PL1_W, PL2_W, WINDOW_S.
+set -u
+PL1_W=6; PL2_W=9; WINDOW_S=8
+[ -r /etc/default/mb81-power-limit ] && . /etc/default/mb81-power-limit
+rc=1
+for d in /sys/class/powercap/intel-rapl:*; do
+  [ "$(cat "$d/name" 2>/dev/null)" = package-0 ] || continue
+  echo $((PL1_W * 1000000))    > "$d/constraint_0_power_limit_uw" &&
+  echo $((WINDOW_S * 1000000)) > "$d/constraint_0_time_window_us" &&
+  echo $((PL2_W * 1000000))    > "$d/constraint_1_power_limit_uw" && rc=0
+done
+[ $rc = 0 ] || logger -t mb81-power-limit "could not set package power limits"
+exit $rc

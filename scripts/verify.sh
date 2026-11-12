@@ -111,6 +111,14 @@ c_codec() {
   grep -qs "CS4208" /proc/asound/card*/codec#* || { echo "CS4208 codec not found (dmesg: no codecs found?); run mb81-audio-recover"; return 1; }
   systemctl is-enabled -q mb81-audio-recover.service || { echo "mb81-audio-recover.service not enabled"; return 1; }
 }
+c_plimit() {
+  # sane package power limits on the fanless chassis (F-19): firmware default is 49 W / 28 s
+  local d=/sys/class/powercap/intel-rapl:0 pl1 win
+  pl1=$(cat $d/constraint_0_power_limit_uw 2>/dev/null) || { echo "no RAPL package domain"; return 1; }
+  win=$(cat $d/constraint_0_time_window_us)
+  [ "$pl1" -le 10000000 ] && [ "$win" -le 10000000 ] || { echo "PL1 $((pl1/1000000)) W, window $((win/1000000)) s: limits not applied (mb81-power-limit)"; return 1; }
+  systemctl is-enabled -q mb81-power-limit.service || { echo "mb81-power-limit.service not enabled"; return 1; }
+}
 c_cam() {
   ls /dev/video* >/dev/null 2>&1 || { echo "no /dev/video*"; return 1; }
   sudo v4l2-ctl --list-devices 2>/dev/null | grep -qi "facetime" || { echo "no FaceTime device in v4l2"; return 1; }
@@ -214,6 +222,7 @@ check PWR-1 "battery and AC status"                              c_batt
 check PWR-2 "thermal sensors and thermald"                       c_sensors
 check PWR-3 "suspend/resume round trip incl. speakers after resume" c_suspend
 check PWR-4 "lid switch"                                          c_lid
+check PWR-5 "package power limits set (fanless chassis)"           c_plimit
 check STO-1 "NVMe healthy"                                        c_nvme
 c_manual() {
   local f=/var/lib/mb81-linux/manual-check

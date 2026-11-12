@@ -1,0 +1,4 @@
+#!/bin/sh
+# macbook8-1-linux: the firmware restores its own power limits on resume; set ours again
+[ "$1" = post ] && systemctl start --no-block mb81-power-limit.service
+exit 0

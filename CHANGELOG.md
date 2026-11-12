@@ -37,3 +37,5 @@
 
 - Audio: `mb81-audio-recover` also re-probes the HDA controller when the codec stops answering
   after a resume (`azx_get_response timeout`, F-17).
+- Heat: package power limits (`components/power-limit`, 6 W sustained / 9 W bursts) keep the
+  fanless CPU around 76 C under sustained load instead of hard-throttling at 95 C (F-19).

@@ -2,6 +2,23 @@
 
 Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-generic), newest first.
 
+## F-19: machine "freezes" under sustained load (CPU at its thermal limit)
+
+- **Symptom.** After about 40 minutes of a 3D game on battery the desktop stopped responding.
+  The machine still answered on the network and logged power-button presses. Package
+  temperature 94 C, `package_throttle_count` 3549 for the boot, and a growing series of
+  `perf: interrupt took too long`. Stopping the game dropped it to 57 C within 30 s.
+- **Cause.** The firmware leaves `MSR_PKG_POWER_LIMIT` at PL1 = PL2 = 49 W (28 s window) on a
+  fanless 4.5 W part; macOS manages power itself. thermald runs but has no usable trip point
+  (`x86_pkg_temp` trips read -274), so nothing slows the CPU until PROCHOT at 95 C.
+- **Measured (4 busy threads).** No limit: 8.0 W, 87 C and still rising after 45 s.
+  PL1 6 W with the 28 s window: still 8.0 W after 50 s. PL1 6 W / 8 s window / PL2 9 W: about
+  9 W for 15 s, then 6.1 W at 75-76 C steady, no new throttle events. PL1 4 W: 62-64 C.
+- **Fix.** `components/power-limit` sets PL1 6 W, PL2 9 W, window 8 s at boot and after resume
+  (override in `/etc/default/mb81-power-limit`). Check: `verify.sh PWR-5`.
+- **Not checked.** Whether the limits survive a resume without the hook, and how much game
+  frame rate the limit costs.
+
 ## F-18: no resume after a long deep-S3 sleep (open)
 
 - **Symptom.** The machine went into deep S3 on Nov 7 at 20:32 and never came back;

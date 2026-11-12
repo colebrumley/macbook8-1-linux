@@ -39,7 +39,7 @@ rm -f /etc/modprobe.d/pluto-hw-*.conf
 [ -d /var/lib/pluto-hw ] && [ ! -d /var/lib/mb81-linux ] && mv /var/lib/pluto-hw /var/lib/mb81-linux
 
 # --- components (order matters: modules before initramfs, initramfs before grub) ------
-COMPONENTS=(${MB81_COMPONENTS:-modprobe spi-pio uart-lpss audio camera bt-recover nvme-resume kbd-backlight acpi-dsdt grub})
+COMPONENTS=(${MB81_COMPONENTS:-modprobe spi-pio uart-lpss audio camera bt-recover nvme-resume power-limit kbd-backlight acpi-dsdt grub})
 failed=()
 for c in "${COMPONENTS[@]}"; do
   echo "== $c"
