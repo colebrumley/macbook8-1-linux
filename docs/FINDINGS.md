@@ -32,10 +32,15 @@ Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-g
   `snd_hda_intel` controller has no codec, it unbinds and rebinds the controller, which found
   the codec on the first try, then restarts the speaker guard in logged-in sessions so their
   PipeWire picks up the sink. Check: `verify.sh AUD-5`.
-- **Limits.** Only the healthy path has run on hardware; the re-probe was done by hand, not yet
-  by the script. A resume does not remove a codec that stops answering (it stays in
-  `/proc/asound`), so the post-resume run only catches a codec that is missing, not one that
-  is present but mute.
+- **Second form (2026-11-12).** After a deep-S3 resume the codec stayed listed but stopped
+  answering: `azx_get_response timeout, switching to polling mode`, `No response from codec,
+  disabling MSI`, then `switching to single_cmd mode`, followed by a steady stream of
+  suppressed `azx_single_send_cmd` errors for the rest of the session. The same unbind + bind
+  cleared it. The script now also re-probes a controller that logged one of these messages in
+  the last two minutes (it runs from the sleep hook).
+- **Limits.** The re-probe has fixed both forms by hand. The script's detection was checked
+  against the real kernel log, but its recovery branches have not yet run on a live failure.
+  Whether sound was audibly broken in the second form was not checked.
 
 ## F-16: desktop shows "Dummy Output" (speaker sink missing)
 

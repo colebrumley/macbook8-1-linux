@@ -1,35 +1,52 @@
 #!/bin/bash
-# MacBook8,1: after a forced power-off or a hung resume the CS4208 sometimes does not answer
-# the HDA controller's codec probe at boot ("snd_hda_intel 0000:00:1b.0: no codecs found!").
-# The card then has no PCMs and every desktop is on "Dummy Output" until the next reboot.
-# Re-probing the controller (unbind + bind) finds the codec again (FINDINGS F-17).
+# MacBook8,1: the CS4208 sometimes stops answering the HDA controller (FINDINGS F-17).
+#  - at boot, after a forced power-off: "snd_hda_intel 0000:00:1b.0: no codecs found!". The
+#    card has no PCMs and every desktop is on "Dummy Output".
+#  - after a deep-S3 resume: "azx_get_response timeout ... switching to single_cmd mode". The
+#    codec stays listed, but the controller polls it and logs errors from then on.
+# Re-probing the controller (unbind + bind) brings the codec back in both cases.
 set -u
 DRV=/sys/bus/pci/drivers/snd_hda_intel
 has_cs4208() { grep -qs "CS4208" /proc/asound/card*/codec#*; }
-for i in $(seq 1 10); do has_cs4208 && exit 0; sleep 1; done   # codec probe is asynchronous
-for try in 1 2 3; do
-  for d in "$DRV"/0000:*; do
+no_codec() {    # bound controllers with no codec at all
+  local d; for d in "$DRV"/0000:*; do
     [ -e "$d" ] || continue
-    ls -d "$d"/hdaudioC*D* >/dev/null 2>&1 && continue          # this controller has a codec
-    dev=$(basename "$d")
+    ls -d "$d"/hdaudioC*D* >/dev/null 2>&1 || basename "$d"
+  done
+}
+stalled() {     # controllers that reported an unresponsive codec in the last two minutes
+  journalctl -k -b --since "-120 seconds" -o cat 2>/dev/null |
+    sed -n 's/^snd_hda_intel \(0000:[0-9a-f:.]*\): \(azx_get_response timeout\|No response from codec\).*/\1/p' | sort -u
+}
+rebind() { echo "$1" > "$DRV/unbind"; sleep 1; echo "$1" > "$DRV/bind"; }
+restart_guards() {
+  # sessions need their PipeWire to pick the card up again: the speaker guard does it.
+  # Talk to each user manager as that user over its runtime dir (same as verify.sh AUD-4),
+  # not via -M user@, which goes through machined and opens a PAM session.
+  local uid name
+  for uid in $(loginctl list-users --no-legend | awk '$1>=1000 {print $1}'); do
+    name=$(id -nu "$uid" 2>/dev/null) && [ -d "/run/user/$uid" ] || continue
+    runuser -u "$name" -- env XDG_RUNTIME_DIR="/run/user/$uid" \
+      systemctl --user restart --no-block mb81-speaker-guard.service 2>/dev/null || true
+  done
+}
+wait_codec() { local i; for i in $(seq 1 10); do has_cs4208 && return 0; sleep 1; done; return 1; }
+
+if wait_codec; then            # codec probe is asynchronous
+  sleep 3                      # resume: the timeout messages arrive a few seconds in
+  devs=$(stalled); [ -n "$devs" ] || exit 0
+  for dev in $devs; do
+    logger -t mb81-audio-recover "codec on $dev stopped answering, re-probing"
+    rebind "$dev"
+  done
+  if wait_codec; then logger -t mb81-audio-recover "CS4208 re-probed"; restart_guards; exit 0; fi
+fi
+for try in 1 2 3; do
+  for dev in $(no_codec); do
     logger -t mb81-audio-recover "no codec on $dev, re-probing (try $try)"
-    echo "$dev" > "$DRV/unbind"; sleep 1; echo "$dev" > "$DRV/bind"
+    rebind "$dev"
   done
-  for i in $(seq 1 10); do
-    if has_cs4208; then
-      logger -t mb81-audio-recover "CS4208 found"
-      # sessions that started without the card need their PipeWire restarted: the guard does it.
-      # Talk to each user manager as that user over its runtime dir (same as verify.sh AUD-4),
-      # not via -M user@, which goes through machined and opens a PAM session.
-      for uid in $(loginctl list-users --no-legend | awk '$1>=1000 {print $1}'); do
-        name=$(id -nu "$uid" 2>/dev/null) && [ -d "/run/user/$uid" ] || continue
-        runuser -u "$name" -- env XDG_RUNTIME_DIR="/run/user/$uid" \
-          systemctl --user restart --no-block mb81-speaker-guard.service 2>/dev/null || true
-      done
-      exit 0
-    fi
-    sleep 1
-  done
+  if wait_codec; then logger -t mb81-audio-recover "CS4208 found"; restart_guards; exit 0; fi
 done
 logger -t mb81-audio-recover "CS4208 still missing after 3 re-probes (a full power-off may be needed)"
 exit 1

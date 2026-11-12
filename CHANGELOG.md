@@ -32,3 +32,8 @@
   reboot (F-17, `verify.sh AUD-5`).
 - Known issue: one hang on resume after about four days in deep S3, cause unknown; what to
   capture if it happens again is in F-18.
+
+## 2026-11-12
+
+- Audio: `mb81-audio-recover` also re-probes the HDA controller when the codec stops answering
+  after a resume (`azx_get_response timeout`, F-17).
