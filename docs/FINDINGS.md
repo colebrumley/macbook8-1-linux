@@ -2,9 +2,27 @@
 
 Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-generic), newest first.
 
+## F-18: no resume after a long deep-S3 sleep (open)
+
+- **Symptom.** The machine went into deep S3 on Nov 7 at 20:32, never came back from it
+  about four days later, and had to be forced off. The next boot hit F-17.
+- **Evidence.** Very little. The journal records the suspend and nothing after it, no resume
+  line. A short suspend/resume earlier the same day worked, and none of the 14 earlier boots
+  had a resume hang.
+- **Cause.** Unknown. A missing resume line can't tell "never woke" from "woke but couldn't
+  write the journal" (F-7's NVMe stall after deep S3 would look like that, but F-7 recovered by
+  itself within minutes and its reset hook runs on every resume). Not known whether the length
+  of the sleep matters.
+- **Next time, before forcing it off.** Note whether the screen, keyboard backlight or caps-lock
+  LED come on, and whether it answers ping/SSH from another machine. After the reboot, save
+  `journalctl -b -1 -o short-monotonic | tail -50`, `/sys/power/suspend_stats/*` and the
+  battery level. To locate a hang in device resume, `echo 1 > /sys/power/pm_trace` before
+  sleeping (it stores a device hash in the RTC, so the clock is wrong after the reboot) and look
+  for `hash matches` in the next boot's kernel log.
+
 ## F-17: no sound at all after a forced restart ("no codecs found")
 
-- **Symptom.** After a hang on resume and a forced power-off, the next boot logs
+- **Symptom.** After a hang on resume (F-18) and a forced power-off, the next boot logs
   `snd_hda_intel 0000:00:1b.0: no codecs found!`. Card `PCH` exists but has no PCMs, PipeWire
   logs `'hw:PCH,1': playback open failed: No such file or directory`, and every session is on
   "Dummy Output". Seen once in 14 boots, on the boot that followed the forced power-off.

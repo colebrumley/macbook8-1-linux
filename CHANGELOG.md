@@ -30,3 +30,5 @@
 - Audio: if the speaker codec is not found at boot ("no codecs found", seen after a forced
   power-off), `mb81-audio-recover` re-probes the HDA controller and restores sound without a
   reboot (F-17, `verify.sh AUD-5`).
+- Known issue: one hang on resume after about four days in deep S3, cause unknown; what to
+  capture if it happens again is in F-18.
