@@ -4,8 +4,8 @@ Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-g
 
 ## F-18: no resume after a long deep-S3 sleep (open)
 
-- **Symptom.** The machine went into deep S3 on Nov 7 at 20:32, never came back from it
-  about four days later, and had to be forced off. The next boot hit F-17.
+- **Symptom.** The machine went into deep S3 on Nov 7 at 20:32 and never came back;
+  about four days later it had to be forced off. The next boot hit F-17.
 - **Evidence.** Very little. The journal records the suspend and nothing after it, no resume
   line. A short suspend/resume earlier the same day worked, and none of the 14 earlier boots
   had a resume hang.
