@@ -95,7 +95,7 @@ Each fix is a component in [`components/`](components/), with its root cause and
 | `uart-lpss` | DKMS `8250_lpss`: suspend/resume support (the UART stays in reset after S3) |
 | `modprobe` | blocks `dw_dmac_pci` (LPSS DMA never completes on this machine) |
 | `acpi-dsdt` | DSDT override built from *your* firmware's table: frees the UART for Bluetooth |
-| `audio` | DKMS `snd-hda-codec-cs420x` with a MacBook8,1 fixup, plus a PipeWire speaker sink |
+| `audio` | DKMS `snd-hda-codec-cs420x` with a MacBook8,1 fixup, plus a PipeWire speaker sink; re-probes the HDA controller if the codec isn't found at boot |
 | `camera` | `facetimehd` driver and firmware |
 | `bt-recover` | rebinds Bluetooth if its UART setup misses at boot/resume |
 | `nvme-resume` | resets the Apple NVMe after resume (it sometimes loses interrupts otherwise) |
@@ -113,7 +113,9 @@ sudo dkms remove spi-pxa2xx-pio --all; sudo dkms remove 8250-lpss-pm --all
 sudo dkms remove cs4208-mb81 --all;    sudo dkms remove facetimehd --all
 sudo rm /usr/lib/firmware/acpi/dsdt.aml /etc/dracut.conf.d/90-acpi-override.conf \
         /etc/modprobe.d/macbook81-no-lpss-dma.conf /etc/modprobe.d/mb81-*.conf
-sudo systemctl disable mb81-bt-recover.service
+sudo systemctl disable mb81-bt-recover.service mb81-audio-recover.service
+sudo rm /usr/local/sbin/mb81-audio-recover /etc/systemd/system/mb81-audio-recover.service \
+        /usr/lib/systemd/system-sleep/mb81-audio-recover
 sudo cp /etc/default/grub.macbook8-1-linux.orig /etc/default/grub && sudo update-grub
 sudo update-initramfs -u -k all && sudo reboot
 ```
