@@ -14,6 +14,10 @@ Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-g
   `snd_hda_intel` controller has no codec, it unbinds and rebinds the controller, which found
   the codec on the first try, then restarts the speaker guard in logged-in sessions so their
   PipeWire picks up the sink. Check: `verify.sh AUD-5`.
+- **Limits.** Only the healthy path has run on hardware; the re-probe was done by hand, not yet
+  by the script. A resume does not remove a codec that stops answering (it stays in
+  `/proc/asound`), so the post-resume run only catches a codec that is missing, not one that
+  is present but mute.
 
 ## F-16: desktop shows "Dummy Output" (speaker sink missing)
 

@@ -1,6 +1,6 @@
 [Unit]
 Description=macbook8-1-linux: re-probe the HDA controller if the speaker codec was not found
-After=sound.target systemd-udev-settle.service
+After=sound.target
 
 [Service]
 Type=oneshot
