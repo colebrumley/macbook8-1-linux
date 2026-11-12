@@ -14,6 +14,12 @@ case "${MB81_MITIGATIONS:-}" in
   off)  PARAMS="$PARAMS mitigations=off" ;;
   auto) PARAMS="$PARAMS mitigations=auto" ;;
 esac
+#   intel_pstate=active (opt-in: MB81_PSTATE=active) : Broadwell has no HWP, so the kernel
+#                     defaults to intel_cpufreq + schedutil. "active" lets intel_pstate pick
+#                     P-states itself. Not benchmarked here. MB81_PSTATE=passive to undo.
+case "${MB81_PSTATE:-}" in
+  active|passive) PARAMS="$PARAMS intel_pstate=$MB81_PSTATE" ;;
+esac
 f=/etc/default/grub
 [ -f $f.macbook8-1-linux.orig ] || cp $f $f.macbook8-1-linux.orig
 cur=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/\1/p' $f)

@@ -99,7 +99,7 @@ Each fix is a component in [`components/`](components/), with its root cause and
 | `camera` | `facetimehd` driver and firmware |
 | `bt-recover` | rebinds Bluetooth if its UART setup misses at boot/resume |
 | `nvme-resume` | resets the Apple NVMe after resume (it sometimes loses interrupts otherwise) |
-| `power-limit` | caps CPU package power (6 W sustained, 9 W bursts): the firmware default is 49 W on a fanless chip, and games ran it into its 95 °C hard throttle |
+| `power-limit` | caps CPU package power (6 W sustained on battery, 7 W on the charger, 9 W bursts): the firmware default is 49 W on a fanless chip, and games ran it into its 95 °C hard throttle |
 | `kbd-backlight` | Fn+F5/F6 keyboard light on desktops other than GNOME (via UPower, so COSMIC shows its OSD slider); keeps the level across reboot/suspend |
 | `grub` | `intel_iommu=off`, sleep mode |
 | `firstboot` | used by the install-media path: runs the installer once on first boot |
@@ -116,7 +116,7 @@ sudo rm /usr/lib/firmware/acpi/dsdt.aml /etc/dracut.conf.d/90-acpi-override.conf
         /etc/modprobe.d/macbook81-no-lpss-dma.conf /etc/modprobe.d/mb81-*.conf
 sudo systemctl disable mb81-bt-recover.service mb81-audio-recover.service mb81-power-limit.service
 sudo rm /usr/local/sbin/mb81-power-limit /etc/systemd/system/mb81-power-limit.service \
-        /usr/lib/systemd/system-sleep/mb81-power-limit
+        /usr/lib/systemd/system-sleep/mb81-power-limit /etc/udev/rules.d/90-mb81-power-limit.rules
 sudo rm /usr/local/sbin/mb81-audio-recover /etc/systemd/system/mb81-audio-recover.service \
         /usr/lib/systemd/system-sleep/mb81-audio-recover
 sudo cp /etc/default/grub.macbook8-1-linux.orig /etc/default/grub && sudo update-grub

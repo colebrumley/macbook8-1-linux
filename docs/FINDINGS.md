@@ -14,8 +14,11 @@ Root causes found while bringing up a MacBook8,1 (Ubuntu 26.10, kernel 7.3.0-9-g
 - **Measured (4 busy threads).** No limit: 8.0 W, 87 C and still rising after 45 s.
   PL1 6 W with the 28 s window: still 8.0 W after 50 s. PL1 6 W / 8 s window / PL2 9 W: about
   9 W for 15 s, then 6.1 W at 75-76 C steady, no new throttle events. PL1 4 W: 62-64 C.
-- **Fix.** `components/power-limit` sets PL1 6 W, PL2 9 W, window 8 s at boot and after resume
-  (override in `/etc/default/mb81-power-limit`). Check: `verify.sh PWR-5`.
+- **Measured (a 3D game, 2 min each).** PL1 6 W: 76-78 C. PL1 7 W: 79-82 C (one 86 C sample),
+  PCH 67 C and still creeping up. No new throttle events in either.
+- **Fix.** `components/power-limit` sets PL1 6 W on battery and 7 W on the charger, PL2 9 W,
+  window 8 s, at boot, after resume and on charger changes (override in
+  `/etc/default/mb81-power-limit`). Check: `verify.sh PWR-5`.
 - **Not checked.** Whether the limits survive a resume without the hook, and how much game
   frame rate the limit costs.
 

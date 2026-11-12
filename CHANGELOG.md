@@ -39,3 +39,5 @@
   after a resume (`azx_get_response timeout`, F-17).
 - Heat: package power limits (`components/power-limit`, 6 W sustained / 9 W bursts) keep the
   fanless CPU around 76 C under sustained load instead of hard-throttling at 95 C (F-19).
+- Power limit is 7 W on the charger, 6 W on battery. `MB81_PSTATE=active` (grub component,
+  opt-in) selects the intel_pstate active driver.

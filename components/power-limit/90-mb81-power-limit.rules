@@ -1,0 +1,2 @@
+# macbook8-1-linux: re-apply the package power limits when the charger is plugged or unplugged
+SUBSYSTEM=="power_supply", KERNEL=="ADP*", ACTION=="change", RUN+="/usr/bin/systemctl start --no-block mb81-power-limit.service"

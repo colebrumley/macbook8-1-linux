@@ -4,10 +4,12 @@
 # hard-throttles, which looks like a frozen machine (FINDINGS F-19). Set sane RAPL limits:
 # bursts at PL2, then PL1 sustained. The window must be short: with the firmware's 28 s
 # window the long-term limit did not engage within 50 s.
-# Override in /etc/default/mb81-power-limit: PL1_W, PL2_W, WINDOW_S.
+# On the charger PL1 is one watt higher (about 80 C on a 3D game instead of 76-78 C).
+# Override in /etc/default/mb81-power-limit: PL1_W, PL1_AC_W, PL2_W, WINDOW_S.
 set -u
-PL1_W=6; PL2_W=9; WINDOW_S=8
+PL1_W=6; PL1_AC_W=7; PL2_W=9; WINDOW_S=8
 [ -r /etc/default/mb81-power-limit ] && . /etc/default/mb81-power-limit
+grep -qs 1 /sys/class/power_supply/ADP*/online && PL1_W=$PL1_AC_W
 rc=1
 for d in /sys/class/powercap/intel-rapl:*; do
   [ "$(cat "$d/name" 2>/dev/null)" = package-0 ] || continue
